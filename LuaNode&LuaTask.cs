@@ -1738,8 +1738,6 @@ namespace FlowCanvas.Nodes
             //UpdateFunctionHead();
             base.OnNodeGUI();
             invokeOnly = GUILayout.Toggle(invokeOnly, "InvokeOnly");
-            if (invokeOnly)
-                return;
 
             if (showAllNode)
             {
@@ -1925,8 +1923,6 @@ namespace FlowCanvas.Nodes
             //UpdateFunctionHead();
             base.OnNodeGUI();
             invokeOnly = GUILayout.Toggle(invokeOnly, "InvokeOnly");
-            if (invokeOnly)
-                return;
 
             if (showAllNode)
             {
