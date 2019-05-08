@@ -198,6 +198,7 @@ namespace NodeCanvas.Tasks.Actions
     public abstract class LuaActionBase : ActionTask
     {
         protected LuaFunction luaFunc;
+        public bool InvokeOnly = false;
 
         [HideInInspector]
         public string functionHead = "";
@@ -288,7 +289,8 @@ namespace NodeCanvas.Tasks.Actions
                     functionBody = recordFunctionBody;
             }
 #endif
-
+            if (InvokeOnly)
+                return base.OnInit();
             if (!Combined)
             {
 
@@ -408,11 +410,14 @@ namespace NodeCanvas.Tasks.Actions
             textAreaStyle.focused.textColor = new Color(0.8f, 0.8f, 0.8f);
             textAreaStyle.margin = new RectOffset(5, 5, 5, 5);
             textAreaStyle.richText = true;
-            GUILayout.Label("FunctionName 不能重名");
+            if (!InvokeOnly)
+                GUILayout.Label(" FunctionName 不能重名");
             UpdateFunctionHead();
             functionName = EditorGUILayout.TextField("functionName", functionName);
 
             EditorGUILayout.TextArea(functionHead, textAreaStyle);
+            if (InvokeOnly)
+                return;
 
             if (!highLightVariable)
                 functionBody = EditorGUILayout.TextArea(functionBody);
@@ -552,7 +557,8 @@ namespace NodeCanvas.Tasks.Actions
     [Category("✫Lua")]
     [Description("Execute Lua Action")]
     public class LuaAction : LuaActionBase
-    {
+    {   
+
         protected override string info
         {
             get
@@ -651,6 +657,7 @@ namespace NodeCanvas.Tasks.Actions
     public class LuaCondition : ConditionTask
     {
         protected LuaFunction luaFunc;
+        public bool InvokeOnly = false;
 
         [HideInInspector]
         public string functionHead = "";
@@ -781,6 +788,8 @@ namespace NodeCanvas.Tasks.Actions
                     functionBody = recordFunctionBody;
             }
 #endif
+            if (InvokeOnly)
+                return base.OnInit();
 
             if (!Combined)
             {
@@ -904,12 +913,14 @@ namespace NodeCanvas.Tasks.Actions
             textAreaStyle.focused.textColor = new Color(0.8f, 0.8f, 0.8f);
             textAreaStyle.margin = new RectOffset(5, 5, 5, 5);
             textAreaStyle.richText = true;
-            GUILayout.Label("FunctionName 不能重名");
+            if (!InvokeOnly)
+                GUILayout.Label("FunctionName 不能重名");
             UpdateFunctionHead();
             functionName = EditorGUILayout.TextField("functionName", functionName);
 
             EditorGUILayout.TextArea(functionHead, textAreaStyle);
-
+            if (!InvokeOnly)
+                return;
             if (!highLightVariable)
                 functionBody = EditorGUILayout.TextArea(functionBody);
             else
@@ -1232,7 +1243,8 @@ namespace FlowCanvas.Nodes
             textAreaStyle.focused.textColor = new Color(0.8f, 0.8f, 0.8f);
             textAreaStyle.margin = new RectOffset(5, 5, 5, 5);
             textAreaStyle.richText = true;
-            GUILayout.Label("FunctionName 不能重名");
+            if (!invokeOnly)
+                GUILayout.Label("FunctionName 不能重名");
             functionName = EditorGUILayout.TextField("functionName", functionName);
 
             EditorGUILayout.TextArea(functionHead);
