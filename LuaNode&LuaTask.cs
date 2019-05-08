@@ -919,7 +919,7 @@ namespace NodeCanvas.Tasks.Actions
             functionName = EditorGUILayout.TextField("functionName", functionName);
 
             EditorGUILayout.TextArea(functionHead, textAreaStyle);
-            if (!InvokeOnly)
+            if (InvokeOnly)
                 return;
             if (!highLightVariable)
                 functionBody = EditorGUILayout.TextArea(functionBody);
