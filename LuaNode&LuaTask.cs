@@ -1048,7 +1048,8 @@ namespace NodeCanvas.Tasks.Actions
 
 #region Lua Node  应用于FlowCanvas
 namespace FlowCanvas.Nodes
-{
+{   
+    [Color("2a5caa")]
     abstract public class CallLuaMethodBase : FlowNode
     {
         protected LuaFunction luaFunc;
@@ -1058,23 +1059,7 @@ namespace FlowCanvas.Nodes
         public string functionName = "LuaMethod";
         public string functionBody = "\n  \n   \n ";
 
-        public bool loadScript = false;
-        public bool LoadScript
-        {
-            get
-            {
-                return loadScript;
-            }
-            set
-            {
-                if (loadScript != value)
-                {
-                    loadScript = value;
-                    GatherPorts();
-                }
-
-            }
-        }
+        public bool invokeOnly = false;
 
         public virtual string endPart
         {
@@ -1110,18 +1095,12 @@ namespace FlowCanvas.Nodes
             }
         }
 
-        ValueInput<string> script;
-        protected override void RegisterPorts()
-        {
-            if (loadScript)
-            {
-                script = AddValueInput<string>("LuaScript");
-            }
-        }
-
         public override void OnGraphStarted()
         {
             base.OnGraphStarted();
+
+            if (invokeOnly)
+                return;
 
 #if UNITY_EDITOR
             if (highLightVariable)
@@ -1131,10 +1110,6 @@ namespace FlowCanvas.Nodes
             }
 #endif
 
-            if (loadScript)
-            {
-                functionBody = script.value;
-            }
 
             if (!Combined)
             {
@@ -1249,8 +1224,6 @@ namespace FlowCanvas.Nodes
         public bool highLightVariable;
         protected override void OnNodeInspectorGUI()
         {
-            LoadScript = GUILayout.Toggle(LoadScript, "LoadLuaScript");
-
             GUIStyle textAreaStyle = new GUIStyle();
             textAreaStyle.normal.textColor = new Color(0.8f, 0.8f, 0.8f);
             textAreaStyle.normal.textColor = new Color(0.8f, 0.8f, 0.8f);
@@ -1263,6 +1236,9 @@ namespace FlowCanvas.Nodes
             functionName = EditorGUILayout.TextField("functionName", functionName);
 
             EditorGUILayout.TextArea(functionHead);
+
+            if (invokeOnly)
+                return;
 
             if (!highLightVariable)
                 functionBody = EditorGUILayout.TextArea(functionBody);
@@ -1414,9 +1390,6 @@ namespace FlowCanvas.Nodes
         FlowOutput outPut;
         protected override void RegisterPorts()
         {
-
-            base.RegisterPorts();
-
             List<ValueInput> ins = new List<ValueInput>();
             for (var i = 0; i < inputDefinitions.Count; i++)
             {
@@ -1501,7 +1474,7 @@ namespace FlowCanvas.Nodes
                     paras += inputDefinitions[i].name;
 
             }
-            functionHead = string.Format(" function {0} ( {1} )\n", functionName, paras);
+            functionHead = string.Format(" function {0} ( {1} )", functionName, paras);
             return functionHead;
         }
 
@@ -1545,8 +1518,10 @@ namespace FlowCanvas.Nodes
         public bool showAllNode = true;
         protected override void OnNodeGUI()
         {
-            UpdateFunctionHead();
+            //UpdateFunctionHead();
             base.OnNodeGUI();
+
+            invokeOnly = GUILayout.Toggle(invokeOnly, "InvokeOnly");
 
 
             if (showAllNode)
@@ -1569,20 +1544,25 @@ namespace FlowCanvas.Nodes
                     GUILayout.EndHorizontal();
                 });
                 functionName = EditorGUILayout.TextField("functionName", functionName);
-                EditorGUILayout.LabelField(functionHead);
-                nodeView = GUILayout.BeginScrollView(nodeView, true, false, GUILayout.Width(280), GUILayout.Height(150));
 
-                if (!highLightVariable)
-                    functionBody = EditorGUILayout.TextArea(functionBody, GUILayout.Width(260));
-                else
+                EditorGUILayout.LabelField(functionHead);
+
+                if (!invokeOnly)
                 {
-                    //GUIStyle s= new GUIStyle();
-                    //s.richText = true;
-                    EditorGUILayout.TextArea(functionBody, GUILayout.Width(260));
+                    nodeView = GUILayout.BeginScrollView(nodeView, true, false, GUILayout.Width(280), GUILayout.Height(150));
+
+                    if (!highLightVariable)
+                        functionBody = EditorGUILayout.TextArea(functionBody, GUILayout.Width(260));
+                    else
+                    {
+                        //GUIStyle s= new GUIStyle();
+                        //s.richText = true;
+                        EditorGUILayout.TextArea(functionBody, GUILayout.Width(260));
+                    }
+                    EditorGUILayout.LabelField(endPart);
+                    //endBody = EditorGUILayout.TextArea(endBody);
+                    GUILayout.EndScrollView();
                 }
-                EditorGUILayout.LabelField(endPart);
-                //endBody = EditorGUILayout.TextArea(endBody);
-                GUILayout.EndScrollView();
             }
 
             if (GUILayout.Button("增加输入参数"))
@@ -1629,8 +1609,6 @@ namespace FlowCanvas.Nodes
         private T result;
         protected override void RegisterPorts()
         {
-            base.RegisterPorts();
-
             List<ValueInput> ins = new List<ValueInput>();
             for (var i = 0; i < inputDefinitions.Count; i++)
             {
@@ -1711,7 +1689,7 @@ namespace FlowCanvas.Nodes
                     paras += inputDefinitions[i].name;
 
             }
-            functionHead = string.Format(" function {0} ( {1} )\n", functionName, paras);
+            functionHead = string.Format(" function {0} ( {1} )", functionName, paras);
             return functionHead;
         }
 
@@ -1757,9 +1735,11 @@ namespace FlowCanvas.Nodes
         public bool showAllNode = true;
         protected override void OnNodeGUI()
         {
-            UpdateFunctionHead();
+            //UpdateFunctionHead();
             base.OnNodeGUI();
-
+            invokeOnly = GUILayout.Toggle(invokeOnly, "InvokeOnly");
+            if (invokeOnly)
+                return;
 
             if (showAllNode)
             {
@@ -1782,19 +1762,22 @@ namespace FlowCanvas.Nodes
                 });
                 functionName = EditorGUILayout.TextField("functionName", functionName);
                 EditorGUILayout.LabelField(functionHead);
-                nodeView = GUILayout.BeginScrollView(nodeView, true, false, GUILayout.Width(280), GUILayout.Height(150));
-
-                if (!highLightVariable)
-                    functionBody = EditorGUILayout.TextArea(functionBody, GUILayout.Width(260));
-                else
+                if (!invokeOnly)
                 {
-                    //GUIStyle s= new GUIStyle();
-                    //s.richText = true;
-                    EditorGUILayout.TextArea(functionBody, GUILayout.Width(260));
+                    nodeView = GUILayout.BeginScrollView(nodeView, true, false, GUILayout.Width(280), GUILayout.Height(150));
+
+                    if (!highLightVariable)
+                        functionBody = EditorGUILayout.TextArea(functionBody, GUILayout.Width(260));
+                    else
+                    {
+                        //GUIStyle s= new GUIStyle();
+                        //s.richText = true;
+                        EditorGUILayout.TextArea(functionBody, GUILayout.Width(260));
+                    }
+                    EditorGUILayout.LabelField(endPart);
+                    //endBody = EditorGUILayout.TextArea(endBody);
+                    GUILayout.EndScrollView();
                 }
-                EditorGUILayout.LabelField(endPart);
-                //endBody = EditorGUILayout.TextArea(endBody);
-                GUILayout.EndScrollView();
             }
 
             if (GUILayout.Button("增加输入参数"))
@@ -1840,8 +1823,6 @@ namespace FlowCanvas.Nodes
         private T result;
         protected override void RegisterPorts()
         {
-            base.RegisterPorts();
-
             List<ValueInput<T>> ins = new List<ValueInput<T>>();
             for (var i = 0; i < inputDefinitions.Count; i++)
             {
@@ -1917,7 +1898,7 @@ namespace FlowCanvas.Nodes
                     paras += inputDefinitions[i];
 
             }
-            functionHead = string.Format(" function {0} ( {1} )\n", functionName, paras);
+            functionHead = string.Format(" function {0} ( {1} )", functionName, paras);
             return functionHead;
         }
 
@@ -1941,8 +1922,12 @@ namespace FlowCanvas.Nodes
         public bool showAllNode = true;
         protected override void OnNodeGUI()
         {
-            UpdateFunctionHead();
+            //UpdateFunctionHead();
             base.OnNodeGUI();
+            invokeOnly = GUILayout.Toggle(invokeOnly, "InvokeOnly");
+            if (invokeOnly)
+                return;
+
             if (showAllNode)
             {
                 GUILayout.Label("传入参数:");
@@ -1964,18 +1949,22 @@ namespace FlowCanvas.Nodes
                 });
                 functionName = EditorGUILayout.TextField("functionName", functionName);
                 EditorGUILayout.LabelField(functionHead);
-                nodeView = GUILayout.BeginScrollView(nodeView, true, false, GUILayout.Width(280), GUILayout.Height(100));
-                if (!highLightVariable)
-                    functionBody = EditorGUILayout.TextArea(functionBody, GUILayout.Width(260));
-                else
+                if (!invokeOnly)
                 {
-                    //GUIStyle s= new GUIStyle();
-                    //s.richText = true;
-                    EditorGUILayout.TextArea(functionBody, GUILayout.Width(260));
+                    nodeView = GUILayout.BeginScrollView(nodeView, true, false, GUILayout.Width(280), GUILayout.Height(150));
+
+                    if (!highLightVariable)
+                        functionBody = EditorGUILayout.TextArea(functionBody, GUILayout.Width(260));
+                    else
+                    {
+                        //GUIStyle s= new GUIStyle();
+                        //s.richText = true;
+                        EditorGUILayout.TextArea(functionBody, GUILayout.Width(260));
+                    }
+                    EditorGUILayout.LabelField(endPart);
+                    //endBody = EditorGUILayout.TextArea(endBody);
+                    GUILayout.EndScrollView();
                 }
-                EditorGUILayout.LabelField(endPart);
-                //endBody = EditorGUILayout.TextArea(endBody);
-                GUILayout.EndScrollView();
             }
 
             if (GUILayout.Button("增加输入参数"))
