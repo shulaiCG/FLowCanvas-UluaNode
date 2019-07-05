@@ -63,7 +63,7 @@ public class LuaManager : MonoBehaviour
         }
     }
 
-    bool isDirty=false;
+    bool isDirty = false;
     public void AddFunction(string functionName, string functionHead, string functionBody)
     {
         if (string.IsNullOrEmpty(functionName) || string.IsNullOrEmpty(functionBody) || string.IsNullOrEmpty(functionHead))
@@ -74,11 +74,12 @@ public class LuaManager : MonoBehaviour
         {
             functionDicts.Add(functionName, completeFunction);
         }
-        else 
-        {   
-            if(completeFunction!= functionDicts[functionName])
+        else
+        {
+            if (completeFunction != functionDicts[functionName])
                 Debug.LogError("Register the same Name LuaMethod:" + functionName);
-            else{
+            else
+            {
                 //相同的function 不用提示
             }
             return;
@@ -87,11 +88,11 @@ public class LuaManager : MonoBehaviour
     }
 
     public void UpdateScript()
-    {   
-        if(!isDirty)
+    {
+        if (!isDirty)
             return;
 
-            isDirty=false;
+        isDirty = false;
         luaScript = " Lua ={}\n";
         functionDicts.ForEach(x =>
         {
@@ -107,7 +108,7 @@ public class LuaManager : MonoBehaviour
 
     private void OnDestroy()
     {
-        luaFunctions.ForEach(x => { x.Value.Dispose();});
+        luaFunctions.ForEach(x => { x.Value.Dispose(); });
         luaFunctions.Clear();
         LuaState.Dispose();
         _luaState = null;
@@ -152,8 +153,8 @@ public class LuaManager : MonoBehaviour
         luaFunctions.Remove(functionName);
         isDirty = true;
     }
-    Dictionary<string,LuaFunction> luaFunctions = new Dictionary<string,LuaFunction>();
-    
+    Dictionary<string, LuaFunction> luaFunctions = new Dictionary<string, LuaFunction>();
+
 
     public LuaFunction GetLuaFunction(string functionName)
     {
@@ -162,7 +163,7 @@ public class LuaManager : MonoBehaviour
             var func = LuaState.GetFunction("Lua." + functionName);
             if (func != null)
             {
-               luaFunctions.Add(functionName, func);
+                luaFunctions.Add(functionName, func);
                 return func;
             }
             else
@@ -176,7 +177,7 @@ public class LuaManager : MonoBehaviour
         }
         return null;
     }
-  
+
 
     public void DisposeLuaFunction(LuaFunction func)
     {
@@ -194,7 +195,7 @@ public class LuaManager : MonoBehaviour
 #region Lua Task 应用于NodeCanvas
 namespace NodeCanvas.Tasks.Actions
 {
-    
+
     [Category("✫Lua")]
     [Description("Execute Lua Action")]
     public abstract class LuaActionBase : ActionTask
@@ -308,7 +309,7 @@ namespace NodeCanvas.Tasks.Actions
                 List<LuaCondition> allLuaCondition = new List<LuaCondition>();
                 List<CallLuaMethodBase> allLuaNode = new List<CallLuaMethodBase>();
                 allGraphs.ForEach(x =>
-                {   
+                {
                     allLuaAction.AddRange(x.GetAllTasksOfType<LuaActionBase>());
                 });
                 allGraphs.ForEach(x =>
@@ -390,7 +391,7 @@ namespace NodeCanvas.Tasks.Actions
 
         public void GetFunction()
         {
-            luaFunc = LuaManager.Instance.GetLuaFunction( functionName);
+            luaFunc = LuaManager.Instance.GetLuaFunction(functionName);
         }
         [HideInInspector]
         public List<string> ParaNameList = new List<string>();
@@ -559,7 +560,7 @@ namespace NodeCanvas.Tasks.Actions
     [Category("✫Lua")]
     [Description("Execute Lua Action")]
     public class LuaAction : LuaActionBase
-    {   
+    {
 
         protected override string info
         {
@@ -572,7 +573,7 @@ namespace NodeCanvas.Tasks.Actions
         {
 
             GetFunction();
-            
+
             switch (ParaNameList.Count)
             {
                 case 0:
@@ -777,10 +778,15 @@ namespace NodeCanvas.Tasks.Actions
             return functionHead;
         }
 
-        bool combined=false;
-        public virtual bool Combined { get { return combined; } set {
+        bool combined = false;
+        public virtual bool Combined
+        {
+            get { return combined; }
+            set
+            {
                 combined = value;
-            } }
+            }
+        }
         protected override string OnInit()
         {
 #if UNITY_EDITOR
@@ -1062,14 +1068,14 @@ namespace NodeCanvas.Tasks.Actions
 #region Lua Node  应用于FlowCanvas
 namespace FlowCanvas.Nodes
 {
-    [Color("2a5caa")]
+    [Color("103BFF")]
     public class EditorCallLuaMethod : FlowNode
     {
         protected LuaFunction luaFunc;
 
 
         public string functionHead = "";
-        public string functionName = "LuaMethod";
+        public string functionName = "EditorModeExcute";
         public string functionBody = "\n  \n   \n ";
 
         public virtual string endPart
@@ -1087,6 +1093,9 @@ namespace FlowCanvas.Nodes
                                                     "\nApplication=UnityEngine.Application" +
                                                     "\nScreen=UnityEngine.Screen" +
                                                     "\nResources=UnityEngine.Resources" + "\nInput=UnityEngine.Input";
+
+        string setCurrentSelectionFunction = "\n function SetCurrentSelection(cs)\n  currentSelection = cs \n end \n this.SetCurrentSelection = SetCurrentSelection \n";
+        //string setCurrentSelectionListFunction = "\n function SetCurrentSelectionList(cs)\n   for index,value in cs do \n  currentSelectionList[index] = value \n  end \n end \n this.SetCurrentSelectionList = SetCurrentSelectionList \n";
 
         public string UpdateFunctionHead()
         {
@@ -1109,108 +1118,149 @@ namespace FlowCanvas.Nodes
         }
         LuaState lua;
         FlowOutput outPut;
-
+        List<ValueInput> ins;
+        LuaResLoader lrl;
         protected override void RegisterPorts()
         {
 
-            List<ValueInput> ins = new List<ValueInput>();
+            ins = new List<ValueInput>();
             for (var i = 0; i < inputDefinitions.Count; i++)
             {
                 var def = inputDefinitions[i];
-            
+
                 ins.Add(AddValueInput(def.name, def.type, def.ID));
             }
             outPut = AddFlowOutput("Out");
             AddFlowInput("Call", f =>
             {
 
-                if (highLightVariable)
-                {
-                    if (!string.IsNullOrEmpty(recordFunctionBody))
-                        functionBody = recordFunctionBody;
-                }
-
-                string luacode = string.Format("{0}\n{1}\n{2}\n{3}", UpdateFunctionHead(), functionBody, endPart, endBody);
-                new LuaResLoader();
-                lua = new LuaState();
-                lua.Start();
-                DelegateFactory.Init();
-                LuaBinder.Bind(lua);
-                lua.DoString(luacode);
-
-                luaFunc = lua.GetFunction( "this."+functionName);
-
-                switch (ins.Count)
-                {
-                    case 0:
-                        luaFunc.Call();
-                        break;
-                    case 1:
-                        luaFunc.Call<object>(ins[0].value);
-                        break;
-                    case 2:
-                        luaFunc.Call<object, object>(ins[0].value, ins[1].value);
-                        break;
-                    case 3:
-                        luaFunc.Call<object, object, object>(ins[0].value, ins[1].value, ins[2].value);
-                        break;
-                    case 4:
-                        luaFunc.Call<object, object, object, object>(ins[0].value, ins[1].value,
-                            ins[2].value, ins[3].value);
-                        break;
-                    case 5:
-                        luaFunc.Call<object, object, object, object, object>(ins[0].value, ins[1].value,
-                            ins[2].value, ins[3].value, ins[4].value);
-                        break;
-                    case 6:
-                        luaFunc.Call<object, object, object, object, object, object>(ins[0].value,
-                            ins[1].value, ins[2].value, ins[3].value, ins[4].value, ins[5].value);
-                        break;
-                    case 7:
-                        luaFunc.Call<object, object, object, object, object, object, object>(
-                            ins[0].value, ins[1].value, ins[2].value, ins[3].value, ins[4].value, ins[5].value,
-                            ins[6].value);
-                        break;
-                    case 8:
-
-                        luaFunc.Call<object, object, object, object, object, object, object, object>(
-                            ins[0].value, ins[1].value, ins[2].value, ins[3].value, ins[4].value, ins[5].value,
-                            ins[6].value, ins[7].value);
-                        break;
-                    case 9:
-
-                        luaFunc.Call<object, object, object, object, object, object, object, object, object>(
-                            ins[0].value, ins[1].value, ins[2].value, ins[3].value, ins[4].value, ins[5].value,
-                            ins[6].value, ins[7].value, ins[8].value);
-                        break;
-                }
-                lua.CheckTop();
-
-                // if (luaFunc != null)
-                // {
-                //     luaFunc.Dispose();
-                //     luaFunc = null;
-                // }
+                Invoke();
 
                 outPut.Call(f);
 
-                if (luaFunc != null)
-                {
-                    luaFunc.Dispose();
-                    luaFunc = null;
-                }
-
-                lua.Dispose();
-                lua = null;
-
             });
         }
-        public List<string> outParaNameList = new List<string>();
+
+        void Invoke()
+        {
+            if (highLightVariable)
+            {
+                if (!string.IsNullOrEmpty(recordFunctionBody))
+                    functionBody = recordFunctionBody;
+            }
+            //string cs = "  currentSelection ={} \n  currentSelectionList ={} \n";
+            string cs = "  currentSelection ={} \n";
+            string luacode = string.Format("{0}\n{1}\n{2}\n{3}\n {4}"  , UpdateFunctionHead(), functionBody, endPart, endBody, cs + setCurrentSelectionFunction );
+            if (lrl == null)
+            {
+                lrl = new LuaResLoader();
+            }
+
+            lua = new LuaState();
+            lua.Start();
+            DelegateFactory.Init();
+            LuaBinder.Bind(lua);
+
+            lua.DoString(luacode);
+            Debug.Log(luacode);
+
+            luaFunc = lua.GetFunction("this." + functionName);
+
 #if UNITY_EDITOR
+
+            var setCS = lua.GetFunction("this.SetCurrentSelection");
+            setCS.Call<GameObject>(UnityEditor.Selection.activeGameObject);
+            //var setCSL = lua.GetFunction("this.SetCurrentSelectionList");
+            //setCSL.Call<GameObject[]>(UnityEditor.Selection.gameObjects);
+
+#endif
+            switch (ins.Count)
+            {
+                case 0:
+                    luaFunc.Call();
+                    break;
+                case 1:
+                    luaFunc.Call<object>(ins[0].value);
+                    break;
+                case 2:
+                    luaFunc.Call<object, object>(ins[0].value, ins[1].value);
+                    break;
+                case 3:
+                    luaFunc.Call<object, object, object>(ins[0].value, ins[1].value, ins[2].value);
+                    break;
+                case 4:
+                    luaFunc.Call<object, object, object, object>(ins[0].value, ins[1].value,
+                        ins[2].value, ins[3].value);
+                    break;
+                case 5:
+                    luaFunc.Call<object, object, object, object, object>(ins[0].value, ins[1].value,
+                        ins[2].value, ins[3].value, ins[4].value);
+                    break;
+                case 6:
+                    luaFunc.Call<object, object, object, object, object, object>(ins[0].value,
+                        ins[1].value, ins[2].value, ins[3].value, ins[4].value, ins[5].value);
+                    break;
+                case 7:
+                    luaFunc.Call<object, object, object, object, object, object, object>(
+                        ins[0].value, ins[1].value, ins[2].value, ins[3].value, ins[4].value, ins[5].value,
+                        ins[6].value);
+                    break;
+                case 8:
+
+                    luaFunc.Call<object, object, object, object, object, object, object, object>(
+                        ins[0].value, ins[1].value, ins[2].value, ins[3].value, ins[4].value, ins[5].value,
+                        ins[6].value, ins[7].value);
+                    break;
+                case 9:
+
+                    luaFunc.Call<object, object, object, object, object, object, object, object, object>(
+                        ins[0].value, ins[1].value, ins[2].value, ins[3].value, ins[4].value, ins[5].value,
+                        ins[6].value, ins[7].value, ins[8].value);
+                    break;
+            }
+            lua.CheckTop();
+            if (luaFunc != null)
+            {
+                luaFunc.Dispose();
+                luaFunc = null;
+            }
+
+            lua.Dispose();
+            lua = null;
+        }
+        public List<string> outParaNameList = new List<string>();
+        void ButtonClick()
+        {
+            for (var i = 0; i < graph.allNodes.Count; i++)
+            {
+                if (graph.allNodes[i] is FlowNode)
+                {
+                    var flowNode = (FlowNode)graph.allNodes[i];
+                    flowNode.AssignSelfInstancePort();
+                    flowNode.BindPorts();
+                }
+            }
+            Invoke();
+            for (var i = 0; i < graph.allNodes.Count; i++)
+            {
+                if (graph.allNodes[i] is FlowNode)
+                {
+                    var flowNode = (FlowNode)graph.allNodes[i];
+                    flowNode.UnBindPorts();
+                }
+            }
+        }
+#if UNITY_EDITOR
+
+
         public bool showExample;
         public bool highLightVariable;
         protected override void OnNodeInspectorGUI()
         {
+            if (GUILayout.Button("Execute"))
+            {
+                ButtonClick();
+            }
             GUIStyle textAreaStyle = new GUIStyle();
             textAreaStyle.normal.textColor = new Color(0.8f, 0.8f, 0.8f);
             textAreaStyle.normal.textColor = new Color(0.8f, 0.8f, 0.8f);
@@ -1397,7 +1447,10 @@ namespace FlowCanvas.Nodes
         {
             //UpdateFunctionHead();
             base.OnNodeGUI();
-
+            if (GUILayout.Button("Execute"))
+            {
+                ButtonClick();
+            }
             if (showAllNode)
             {
                 GUILayout.Label("传入参数:");
@@ -1467,7 +1520,7 @@ namespace FlowCanvas.Nodes
     {
         protected LuaFunction luaFunc;
 
-  
+
         public string functionHead = "";
         public string functionName = "LuaMethod";
         public string functionBody = "\n  \n   \n ";
@@ -1538,7 +1591,7 @@ namespace FlowCanvas.Nodes
                 List<LuaCondition> allLuaCondition = new List<LuaCondition>();
                 List<CallLuaMethodBase> allLuaNode = new List<CallLuaMethodBase>();
                 allGraphs.ForEach(x =>
-                {   
+                {
                     allLuaAction.AddRange(x.GetAllTasksOfType<LuaActionBase>());
                 });
                 allGraphs.ForEach(x =>
@@ -1819,16 +1872,16 @@ namespace FlowCanvas.Nodes
                 switch (ins.Count)
                 {
                     case 0:
-                         luaFunc.Call();
+                        luaFunc.Call();
                         break;
                     case 1:
-                         luaFunc.Call<object>(ins[0].value);
+                        luaFunc.Call<object>(ins[0].value);
                         break;
                     case 2:
                         luaFunc.Call<object, object>(ins[0].value, ins[1].value);
                         break;
                     case 3:
-                         luaFunc.Call<object, object, object>(ins[0].value, ins[1].value, ins[2].value);
+                        luaFunc.Call<object, object, object>(ins[0].value, ins[1].value, ins[2].value);
                         break;
                     case 4:
                         luaFunc.Call<object, object, object, object>(ins[0].value, ins[1].value,
@@ -1848,16 +1901,16 @@ namespace FlowCanvas.Nodes
                             ins[6].value);
                         break;
                     case 8:
-                       
-                            luaFunc.Call<object, object, object, object, object, object, object, object>(
-                                ins[0].value, ins[1].value, ins[2].value, ins[3].value, ins[4].value, ins[5].value,
-                                ins[6].value, ins[7].value);
+
+                        luaFunc.Call<object, object, object, object, object, object, object, object>(
+                            ins[0].value, ins[1].value, ins[2].value, ins[3].value, ins[4].value, ins[5].value,
+                            ins[6].value, ins[7].value);
                         break;
                     case 9:
-                       
-                            luaFunc.Call<object, object, object, object, object, object, object, object, object>(
-                                ins[0].value, ins[1].value, ins[2].value, ins[3].value, ins[4].value, ins[5].value,
-                                ins[6].value, ins[7].value, ins[8].value);
+
+                        luaFunc.Call<object, object, object, object, object, object, object, object, object>(
+                            ins[0].value, ins[1].value, ins[2].value, ins[3].value, ins[4].value, ins[5].value,
+                            ins[6].value, ins[7].value, ins[8].value);
                         break;
                 }
                 LuaManager.Instance.LuaState.CheckTop();
