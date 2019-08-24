@@ -32,7 +32,7 @@ public class LuaManager : MonoBehaviour
             return _instance;
         }
     }
-
+    [TextArea]
     public string luaScript = "";
 
     public Dictionary<string, string> functionDicts = new Dictionary<string, string>();
@@ -1075,7 +1075,7 @@ namespace FlowCanvas.Nodes
 
 
         public string functionHead = "";
-        public string functionName = "EditorModeExcute";
+        public string functionName = "EditorModeExecute";
         public string functionBody = "\n  \n   \n ";
 
         public virtual string endPart
@@ -1117,7 +1117,7 @@ namespace FlowCanvas.Nodes
             return functionHead;
         }
         LuaState lua;
-        FlowOutput outPut;
+        //FlowOutput outPut;
         List<ValueInput> ins;
         LuaResLoader lrl;
         protected override void RegisterPorts()
@@ -1130,15 +1130,15 @@ namespace FlowCanvas.Nodes
 
                 ins.Add(AddValueInput(def.name, def.type, def.ID));
             }
-            outPut = AddFlowOutput("Out");
-            AddFlowInput("Call", f =>
-            {
+            //outPut = AddFlowOutput("Out");
+            //AddFlowInput("Call", f =>
+            //{
 
-                Invoke();
+            //    Invoke();
 
-                outPut.Call(f);
+            //    outPut.Call(f);
 
-            });
+            //});
         }
 
         void Invoke()
@@ -1162,7 +1162,7 @@ namespace FlowCanvas.Nodes
             LuaBinder.Bind(lua);
 
             lua.DoString(luacode);
-            Debug.Log(luacode);
+            //Debug.Log(luacode);
 
             luaFunc = lua.GetFunction("this." + functionName);
 
@@ -1259,6 +1259,7 @@ namespace FlowCanvas.Nodes
         {
             if (GUILayout.Button("Execute"))
             {
+                UpdateFunctionHead();
                 ButtonClick();
             }
             GUIStyle textAreaStyle = new GUIStyle();
