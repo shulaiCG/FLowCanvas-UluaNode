@@ -1,3 +1,4 @@
+
 //要使用此节点需要下载 合并 ToLua的项目工程文件:  https://github.com/topameng/tolua
 //需要同时导入FlowCanvas和NodeCnavas插件才不会报错。
 using System.Collections.Generic;
@@ -26,13 +27,22 @@ public class LuaManager : MonoBehaviour
         {
             if (_instance == null)
             {
-                GameObject luaManagerGO = new GameObject("[LuaManager]");
-                _instance = luaManagerGO.AddComponent<LuaManager>();
+                var findResult = FindObjectOfType<LuaManager>();
+                if(findResult==null)
+                {
+                    GameObject luaManagerGO = new GameObject("[LuaManager]");
+                    _instance = luaManagerGO.AddComponent<LuaManager>();
+                }
+                else
+                {
+                    _instance = findResult;
+                }
+
             }
             return _instance;
         }
     }
-    [TextArea]
+
     public string luaScript = "";
 
     public Dictionary<string, string> functionDicts = new Dictionary<string, string>();
@@ -55,8 +65,9 @@ public class LuaManager : MonoBehaviour
                 _luaState.Start();
                 DelegateFactory.Init();
                 LuaBinder.Bind(_luaState);
-
-                DontDestroyOnLoad(this.gameObject);
+                
+                if(Application.isPlaying)
+                    DontDestroyOnLoad(this.gameObject);
             }
 
             return _luaState;
@@ -76,13 +87,14 @@ public class LuaManager : MonoBehaviour
         }
         else
         {
-            if (completeFunction != functionDicts[functionName])
-                Debug.LogError("Register the same Name LuaMethod:" + functionName);
+            if(functionDicts[functionName]== completeFunction)
+            {
+
+            }
             else
             {
-                //相同的function 不用提示
+                Debug.Log(string.Format("Function Name:{0},重复注册", functionName));
             }
-            return;
         }
         isDirty = true;
     }
@@ -99,12 +111,104 @@ public class LuaManager : MonoBehaviour
             luaScript += string.Format("\n{1}\n end\n Lua.{0}={0} \n", x.Key, x.Value);
         });
 
-        endParts.ForEach(x => {
+        endParts.ForEach(x =>
+        {
             luaScript += x + "\n";
         });
 
         LuaState.DoString(luaScript);
     }
+
+    public void SearchCurrentGraphAllLuaMethod(Component nodeAgent)
+    {
+        List<Graph> allGraphs = new List<Graph>();
+
+        var rootGraph = nodeAgent.GetComponent<GraphOwner>().graph;
+        var childGraph = rootGraph.GetAllNestedGraphs<Graph>(true);
+
+        allGraphs.Add(rootGraph);
+        allGraphs.AddRange(childGraph);
+
+        List<LuaActionBase> allLuaAction = new List<LuaActionBase>();
+        List<LuaCondition> allLuaCondition = new List<LuaCondition>();
+        List<CallLuaMethodBase> allLuaNode = new List<CallLuaMethodBase>();
+        allGraphs.ForEach(x =>
+        {
+            allLuaAction.AddRange(x.GetAllTasksOfType<LuaActionBase>());
+        });
+        allGraphs.ForEach(x =>
+        {
+            allLuaCondition.AddRange(x.GetAllTasksOfType<LuaCondition>());
+        });
+        allGraphs.ForEach(x =>
+        {
+            allLuaNode.AddRange(x.GetAllNodesOfType<CallLuaMethodBase>());
+        });
+
+        allLuaAction.ForEach(x =>
+        {
+            if (!x.Combined)
+            {
+                x.Combined = true;//其他luaNode不需要再初始化了
+
+                x.UpdateFunctionHead();
+                if (!x.InvokeOnly)
+                    LuaManager.Instance.AddFunction(x.functionName, x.functionHead, x.functionBody);
+
+                string[] endbodyWithoutBlank = x.endBody.Replace(" ", "").Split('\n');
+                endbodyWithoutBlank.ForEach(y =>
+                {
+                    if (!LuaManager.Instance.endParts.Contains(y))
+                    {
+                        LuaManager.Instance.endParts.Add(y);
+                    }
+                });
+            }
+        });
+
+        allLuaCondition.ForEach(x =>
+        {
+            if (!x.Combined)
+            {
+                x.Combined = true;//其他luaNode不需要再初始化了
+                x.UpdateFunctionHead();
+                if (!x.InvokeOnly)
+                    LuaManager.Instance.AddFunction(x.functionName, x.functionHead, x.functionBody);
+
+                string[] endbodyWithoutBlank = x.endBody.Replace(" ", "").Split('\n');
+                endbodyWithoutBlank.ForEach(y =>
+                {
+                    if (!LuaManager.Instance.endParts.Contains(y))
+                    {
+                        LuaManager.Instance.endParts.Add(y);
+                    }
+                });
+            }
+        });
+
+        allLuaNode.ForEach(x =>
+        {
+            if (!x.Combined)
+            {
+                x.Combined = true;//其他luaNode不需要再初始化了
+                x.UpdateFunctionHead();
+                if (!x.InvokeOnly)
+                    LuaManager.Instance.AddFunction(x.functionName, x.functionHead, x.functionBody);
+
+                string[] endbodyWithoutBlank = x.endBody.Replace(" ", "").Split('\n');
+                endbodyWithoutBlank.ForEach(y =>
+                {
+                    if (!LuaManager.Instance.endParts.Contains(y))
+                    {
+                        LuaManager.Instance.endParts.Add(y);
+                    }
+                });
+            }
+        });
+
+        LuaManager.Instance.UpdateScript();
+    }
+
 
     private void OnDestroy()
     {
@@ -114,6 +218,14 @@ public class LuaManager : MonoBehaviour
         _luaState = null;
     }
 
+#if UNITY_EDITOR
+
+    public string luaGamma = "示例:使用Type或静态方法 如:使用GameObject.AddComonent(typeof(ParticleSystem)), \n 在最下方 写入 GameObject = UnityEngine.GameObject 和 ParticleSystem = UnityEngine.ParticleSystem \n  \n 调用方法使用冒号 ':' 如 transform: Rotate, 属性和字段'.'点号不变 \n 构造实例不需要 new, 变量无需声明类型, 如: angle = Vector3(45, 0, 0) \n 常用的语句: \n if a > 0 then\n ...\n end " +
+                    "\n\n  if a>0 then\n  ... \n elseif a=10 then \n  ...\n  else\n  ... \n end \n\n while a>0 do \n ... end \n \nfor index= 0, 10 ,(从0-10的增值幅度,默认1,可不写) do\n  ...break 或 return 中止跳出循环  \nend \n \nfor index, value in pairs(字典或table) do\n  index 指数 ,value 值... 中止  \nend  \n repeat ...\n  until a>0 \n 遍历数组,列表或字典 local iter = myDiectionary:GetEnumerator() \n while iter:MoveNext() do\n  print(iter.Current.Key..iter.Current.Value)\n end \r \n\n赋值: 字符串: a = 'hello'\n num = num+1 ,无++ 或-- , a,b=5,6 等同" +
+                    " a=5 b=6 ,x, y = y, x 可以交换数值(计算好后才赋值) \n 方法外声明的变量 j = 10 是全局变量  \r\n local i = 1 有local 是局部变量 \n nil是空 不是null  \n 获取type:  type(gameobject)  获得字符串: tostring(10) 字符串用双引号和单引号都可以; \n\n 表格 Table : 新建表格 myTable={} ; myTable={ 1,'jame',gameobject} 可以传入任意类型的值, 默认索引以1开始\n" +
+                    " 可以使用字符做key myTable['myKey']=myObject,字符串做索引还可以用myTable.myKey形式 \n 也可以用数字做key,如:return myTable[2], \n\n 算数符: +(加) -(减) *(乘) /(除) %(取余) ^(乘幂: 10^2=100) -(负号: -100) \n\n 关系运算符: == 等于 ~=不等于 >大于 <小于 >= <= \n \n逻辑运算符: and(相当于&&) or(相当于||) not(相当于!)+\n\n 其他运算符: .. 字符串相加 # 字符长度(#hello 为5 ,也可用于table的count数值) \n\n 数学库:" +
+                    "圆周率: math.pi  \n绝对值math.abs(-15)=15 ; \nmath.ceil(5.8)=6 ;\nmath.floor(5.6)=5 ;\n取模运算:math.mod(14, 5)=4 ;\n最大值: math.max(2.71, 100, -98, 23)=100 ;\n最小值 math.min ; \n得到x的y次方: math.pow(2, 5)=32 ;  \n开平方函数: math.sqrt(16)=4;角度转弧度: 3.14159265358 ;\n 弧度转角度: math.deg(math.pi)=180 ;\n 获取随机数: math.random(1, 100) ;\n设置随机数种子:math.randomseed(os.time()) 在使用math.random函数之前必须使用此函数设置随机数种子  ;\n正弦: math.sin(math.rad(30))=0.5 ; \n反正弦函数:math.asin(0.5)=0.52359877 ;";
+#endif
     #region Dispose LuaFunction
     //public float disposeLuaFunctionInnerTime = 10f;
     //public int everyDisposeFunctionCount = 10;
@@ -226,23 +338,12 @@ namespace NodeCanvas.Tasks.Actions
 
         [HideInInspector]
         [SerializeField]
-        public string endBody = "GameObject=UnityEngine.GameObject" +
-                                                    "\nMathf=UnityEngine.Mathf" +
-                                                    "\nTime=UnityEngine.Time" +
-                                                    "\nApplication=UnityEngine.Application" +
-                                                    "\nScreen=UnityEngine.Screen" +
-                                                    "\nResources=UnityEngine.Resources" + "\nInput=UnityEngine.Input";
-
-
-
+        public string endBody = string.Format("{0}\n{1}\n{2}\n{3}\n{4}\n{5}\n{6}", "GameObject=UnityEngine.GameObject", "Mathf=UnityEngine.Mathf", "Time=UnityEngine.Time", "Application=UnityEngine.Application", "Screen=UnityEngine.Screen", "Resources=UnityEngine.Resources", "Input=UnityEngine.Input");
+                                                     
         public virtual string UpdateFunctionHead()
         {
             string parameters = "";
-            //if (ParaNameList != null && ParaNameList.Count > 0)
-            //{
-            //    ParaNameList.ForEach(x => parameters += x + ",");
-            //    parameters = parameters.Remove(parameters.Length - 1);
-            //}
+
             ParaNameList.Clear();
             if (para1.varRef != null)
             {
@@ -293,96 +394,13 @@ namespace NodeCanvas.Tasks.Actions
             }
 #endif
             if (InvokeOnly)
+            {
                 return base.OnInit();
+            }
+
             if (!Combined)
             {
-
-                List<Graph> allGraphs = new List<Graph>();
-
-                var rootGraph = agent.GetComponent<GraphOwner>().graph;
-                var childGraph = rootGraph.GetAllNestedGraphs<Graph>(true);
-
-                allGraphs.Add(rootGraph);
-                allGraphs.AddRange(childGraph);
-
-                List<LuaActionBase> allLuaAction = new List<LuaActionBase>();
-                List<LuaCondition> allLuaCondition = new List<LuaCondition>();
-                List<CallLuaMethodBase> allLuaNode = new List<CallLuaMethodBase>();
-                allGraphs.ForEach(x =>
-                {
-                    allLuaAction.AddRange(x.GetAllTasksOfType<LuaActionBase>());
-                });
-                allGraphs.ForEach(x =>
-                {
-                    allLuaCondition.AddRange(x.GetAllTasksOfType<LuaCondition>());
-                });
-                allGraphs.ForEach(x =>
-                {
-                    allLuaNode.AddRange(x.GetAllNodesOfType<CallLuaMethodBase>());
-                });
-
-                allLuaAction.ForEach(x =>
-                {
-                    if (!x.Combined)
-                    {
-                        x.Combined = true;//其他luaNode不需要再初始化了
-
-                        x.UpdateFunctionHead();
-
-                        LuaManager.Instance.AddFunction(x.functionName, x.functionHead, x.functionBody);
-
-                        string[] endbodyWithoutBlank = x.endBody.Replace(" ", "").Split('\n');
-                        endbodyWithoutBlank.ForEach(y =>
-                        {
-                            if (!LuaManager.Instance.endParts.Contains(y))
-                            {
-                                LuaManager.Instance.endParts.Add(y);
-                            }
-                        });
-                    }
-                });
-
-                allLuaCondition.ForEach(x =>
-                {
-                    if (!x.Combined)
-                    {
-                        x.Combined = true;//其他luaNode不需要再初始化了
-                        x.UpdateFunctionHead();
-
-                        LuaManager.Instance.AddFunction(x.functionName, x.functionHead, x.functionBody);
-
-                        string[] endbodyWithoutBlank = x.endBody.Replace(" ", "").Split('\n');
-                        endbodyWithoutBlank.ForEach(y =>
-                        {
-                            if (!LuaManager.Instance.endParts.Contains(y))
-                            {
-                                LuaManager.Instance.endParts.Add(y);
-                            }
-                        });
-                    }
-                });
-
-                allLuaNode.ForEach(x =>
-                {
-                    if (!x.Combined)
-                    {
-                        x.Combined = true;//其他luaNode不需要再初始化了
-                        x.UpdateFunctionHead();
-
-                        LuaManager.Instance.AddFunction(x.functionName, x.functionHead, x.functionBody);
-
-                        string[] endbodyWithoutBlank = x.endBody.Replace(" ", "").Split('\n');
-                        endbodyWithoutBlank.ForEach(y =>
-                        {
-                            if (!LuaManager.Instance.endParts.Contains(y))
-                            {
-                                LuaManager.Instance.endParts.Add(y);
-                            }
-                        });
-                    }
-                });
-
-                LuaManager.Instance.UpdateScript();
+                LuaManager.Instance.SearchCurrentGraphAllLuaMethod(agent);
                 Combined = true;
             }
             return base.OnInit();
@@ -401,6 +419,8 @@ namespace NodeCanvas.Tasks.Actions
         public bool showExample;
         [HideInInspector]
         public bool highLightVariable;
+
+        private bool hasInvokeTarget;
         protected override void OnTaskInspectorGUI()
         {
             base.OnTaskInspectorGUI();
@@ -417,8 +437,17 @@ namespace NodeCanvas.Tasks.Actions
                 GUILayout.Label(" FunctionName 不能重名");
             UpdateFunctionHead();
             functionName = EditorGUILayout.TextField("functionName", functionName);
-
             EditorGUILayout.TextArea(functionHead, textAreaStyle);
+
+            if (InvokeOnly && GUILayout.Button("UpdateInvokeMethodString"))
+            {
+                LuaManager.Instance.SearchCurrentGraphAllLuaMethod(agent);
+                string functionBody = "";
+                LuaManager.Instance.functionDicts.TryGetValue(functionName, out functionBody);
+                hasInvokeTarget = !string.IsNullOrEmpty(functionBody);
+            }
+            GUILayout.Label(hasInvokeTarget? LuaManager.Instance.functionDicts[functionName]:"    Null");
+
             if (InvokeOnly)
                 return;
 
@@ -445,19 +474,10 @@ namespace NodeCanvas.Tasks.Actions
                 highLightVariable = !highLightVariable;
             }
 
-            if (GUILayout.Button("ConvertC#ToLua"))
-            {
-                ConvertCSharpScript();
-            }
 
             showExample = GUILayout.Toggle(showExample, "ShowLuaExample");
             if (showExample)
-                GUILayout.TextArea(
-                    "示例:使用Type或静态方法 如:使用GameObject.AddComonent(typeof(ParticleSystem)), \n 在最下方 写入 GameObject = UnityEngine.GameObject 和 ParticleSystem = UnityEngine.ParticleSystem \n  \n 调用方法使用冒号 ':' 如 transform: Rotate, 属性和字段'.'点号不变 \n 构造实例不需要 new, 变量无需声明类型, 如: angle = Vector3(45, 0, 0) \n 常用的语句: \n if a > 0 then\n ...\n end " +
-                    "\n\n  if a>0 then\n  ... \n elseif a=10 then \n  ...\n  else\n  ... \n end \n\n while a>0 do \n ... end \n \nfor index= 0, 10 ,(从0-10的增值幅度,默认1,可不写) do\n  ...break 或 return 中止跳出循环  \nend \n \nfor index, value in pairs(字典或table) do\n  index 指数 ,value 值... 中止  \nend  \n repeat ...\n  until a>0 \n 遍历数组,列表或字典 local iter = myDiectionary:GetEnumerator() \n while iter:MoveNext() do\n  print(iter.Current.Key..iter.Current.Value)\n end \r \n\n赋值: 字符串: a = 'hello'\n num = num+1 ,无++ 或-- , a,b=5,6 等同" +
-                    " a=5 b=6 ,x, y = y, x 可以交换数值(计算好后才赋值) \n 方法外声明的变量 j = 10 是全局变量  \r\n local i = 1 有local 是局部变量 \n nil是空 不是null  \n 获取type:  type(gameobject)  获得字符串: tostring(10) 字符串用双引号和单引号都可以; \n\n 表格 Table : 新建表格 myTable={} ; myTable={ 1,'jame',gameobject} 可以传入任意类型的值, 默认索引以1开始\n" +
-                    " 可以使用字符做key myTable['myKey']=myObject,字符串做索引还可以用myTable.myKey形式 \n 也可以用数字做key,如:return myTable[2], \n\n 算数符: +(加) -(减) *(乘) /(除) %(取余) ^(乘幂: 10^2=100) -(负号: -100) \n\n 关系运算符: == 等于 ~=不等于 >大于 <小于 >= <= \n \n逻辑运算符: and(相当于&&) or(相当于||) not(相当于!)+\n\n 其他运算符: .. 字符串相加 # 字符长度(#hello 为5 ,也可用于table的count数值) \n\n 数学库:" +
-                    "圆周率: math.pi  \n绝对值math.abs(-15)=15 ; \nmath.ceil(5.8)=6 ;\nmath.floor(5.6)=5 ;\n取模运算:math.mod(14, 5)=4 ;\n最大值: math.max(2.71, 100, -98, 23)=100 ;\n最小值 math.min ; \n得到x的y次方: math.pow(2, 5)=32 ;  \n开平方函数: math.sqrt(16)=4;角度转弧度: 3.14159265358 ;\n 弧度转角度: math.deg(math.pi)=180 ;\n 获取随机数: math.random(1, 100) ;\n设置随机数种子:math.randomseed(os.time()) 在使用math.random函数之前必须使用此函数设置随机数种子  ;\n正弦: math.sin(math.rad(30))=0.5 ; \n反正弦函数:math.asin(0.5)=0.52359877 ;");
+                GUILayout.TextArea(LuaManager.Instance.luaGamma);
         }
         [HideInInspector]
         public string recordFunctionBody;
@@ -519,38 +539,6 @@ namespace NodeCanvas.Tasks.Actions
             return inputString;
         }
 
-        public void ConvertCSharpScript()
-        {
-            string p = @"^\s*"; //消除开头空格
-            var result = Regex.Matches(functionBody, p);
-            result.Cast<Match>().Select(x => x.Value).ForEach(y => { functionBody = Regex.Replace(functionBody, y, ""); });
-
-            //string p2 = @"\.[A-Z]+?"; //将方法前的点好换成冒号
-            //var result2 = Regex.Matches(functionBody, p2);
-            //result2.Cast<Match>().Select(x => x.Value).ForEach(y =>
-            //{
-            //    //Debug.Log(y);
-            //    functionBody = Regex.Replace(functionBody, y, y.Replace(".",":")); });
-
-            string p3 = @"\s*?var\s+?"; //将var 改成local
-            var result3 = Regex.Matches(functionBody, p3);
-            result3.Cast<Match>().Select(x => x.Value).ForEach(y =>
-            {
-                //Debug.Log(y);
-                functionBody = Regex.Replace(functionBody, y, y.Replace("var", "local"));
-            });
-            string p4 = @"\df"; //将数值后的f 改成空
-            var fresult = Regex.Matches(functionBody, p4);
-            fresult.Cast<Match>().Select(x => x.Value).ForEach(y =>
-            {
-                //Debug.Log(y);
-                functionBody = Regex.Replace(functionBody, y, y.Replace("f", ""));
-            });
-
-            functionBody = functionBody.Replace(";", ""); //移除封号
-            functionBody = functionBody.Replace("new ", ""); //移除new 
-            functionBody = functionBody.Replace("\"", "\'"); //双引号改单引号
-        }
 
 
 #endif
@@ -597,11 +585,6 @@ namespace NodeCanvas.Tasks.Actions
             }
             LuaManager.Instance.LuaState.CheckTop();
 
-            //if (luaFunc != null)
-            //{
-            //    luaFunc.Dispose();
-            //    luaFunc = null;
-            //}
             EndAction();
         }
     }
@@ -645,11 +628,6 @@ namespace NodeCanvas.Tasks.Actions
             }
             LuaManager.Instance.LuaState.CheckTop();
 
-            //if (luaFunc != null)
-            //{
-            //    luaFunc.Dispose();
-            //    luaFunc = null;
-            //}
             EndAction();
         }
     }
@@ -742,11 +720,7 @@ namespace NodeCanvas.Tasks.Actions
         public virtual string UpdateFunctionHead()
         {
             string parameters = "";
-            //if (ParaNameList != null && ParaNameList.Count > 0)
-            //{
-            //    ParaNameList.ForEach(x => parameters += x + ",");
-            //    parameters = parameters.Remove(parameters.Length - 1);
-            //}
+
             ParaNameList.Clear();
             if (para1.varRef != null)
             {
@@ -802,83 +776,7 @@ namespace NodeCanvas.Tasks.Actions
             if (!Combined)
             {
                 Combined = true;
-                List<Graph> allGraphs = new List<Graph>();
-
-                var rootGraph = agent.GetComponent<GraphOwner>().graph;
-                var childGraph = rootGraph.GetAllNestedGraphs<Graph>(true);
-
-                allGraphs.Add(rootGraph);
-                allGraphs.AddRange(childGraph);
-
-                List<LuaActionBase> allLuaAction = new List<LuaActionBase>();
-                List<LuaCondition> allLuaCondition = new List<LuaCondition>();
-                List<CallLuaMethodBase> allLuaNode = new List<CallLuaMethodBase>();
-                allGraphs.ForEach(x =>
-                {
-                    allLuaAction.AddRange(x.GetAllTasksOfType<LuaActionBase>());
-                });
-                allGraphs.ForEach(x =>
-                {
-                    allLuaCondition.AddRange(x.GetAllTasksOfType<LuaCondition>());
-                });
-                allGraphs.ForEach(x =>
-                {
-                    allLuaNode.AddRange(x.GetAllNodesOfType<CallLuaMethodBase>());
-                });
-
-                allLuaAction.ForEach(x =>
-                {
-                    x.Combined = true;//其他luaNode不需要再初始化了
-
-                    x.UpdateFunctionHead();
-
-                    LuaManager.Instance.AddFunction(x.functionName, x.functionHead, x.functionBody);
-
-                    string[] endbodyWithoutBlank = x.endBody.Replace(" ", "").Split('\n');
-                    endbodyWithoutBlank.ForEach(y =>
-                    {
-                        if (!LuaManager.Instance.endParts.Contains(y))
-                        {
-                            LuaManager.Instance.endParts.Add(y);
-                        }
-                    });
-                });
-
-                allLuaCondition.ForEach(x =>
-                {
-                    x.Combined = true;//其他luaNode不需要再初始化了
-                    x.UpdateFunctionHead();
-
-                    LuaManager.Instance.AddFunction(x.functionName, x.functionHead, x.functionBody);
-
-                    string[] endbodyWithoutBlank = x.endBody.Replace(" ", "").Split('\n');
-                    endbodyWithoutBlank.ForEach(y =>
-                    {
-                        if (!LuaManager.Instance.endParts.Contains(y))
-                        {
-                            LuaManager.Instance.endParts.Add(y);
-                        }
-                    });
-                });
-
-                allLuaNode.ForEach(x =>
-                {
-                    x.Combined = true;//其他luaNode不需要再初始化了
-                    x.UpdateFunctionHead();
-
-                    LuaManager.Instance.AddFunction(x.functionName, x.functionHead, x.functionBody);
-
-                    string[] endbodyWithoutBlank = x.endBody.Replace(" ", "").Split('\n');
-                    endbodyWithoutBlank.ForEach(y =>
-                    {
-                        if (!LuaManager.Instance.endParts.Contains(y))
-                        {
-                            LuaManager.Instance.endParts.Add(y);
-                        }
-                    });
-                });
-
-                LuaManager.Instance.UpdateScript();
+                LuaManager.Instance.SearchCurrentGraphAllLuaMethod(agent);
 
             }
 
@@ -909,6 +807,7 @@ namespace NodeCanvas.Tasks.Actions
         public bool showExample;
         [HideInInspector]
         public bool highLightVariable;
+        bool hasInvokeTarget;
         protected override void OnTaskInspectorGUI()
         {
             base.OnTaskInspectorGUI();
@@ -927,6 +826,15 @@ namespace NodeCanvas.Tasks.Actions
             functionName = EditorGUILayout.TextField("functionName", functionName);
 
             EditorGUILayout.TextArea(functionHead, textAreaStyle);
+
+            if (InvokeOnly && GUILayout.Button("UpdateInvokeMethodString"))
+            {
+                LuaManager.Instance.SearchCurrentGraphAllLuaMethod(agent);
+                string functionBody = "";
+                LuaManager.Instance.functionDicts.TryGetValue(functionName, out functionBody);
+                hasInvokeTarget = !string.IsNullOrEmpty(functionBody);
+            }
+            GUILayout.Label(hasInvokeTarget ? LuaManager.Instance.functionDicts[functionName] +"\nend": "    Null");
             if (InvokeOnly)
                 return;
             if (!highLightVariable)
@@ -952,19 +860,9 @@ namespace NodeCanvas.Tasks.Actions
                 highLightVariable = !highLightVariable;
             }
 
-            if (GUILayout.Button("ConvertC#ToLua"))
-            {
-                ConvertCSharpScript();
-            }
-
             showExample = GUILayout.Toggle(showExample, "ShowLuaExample");
             if (showExample)
-                GUILayout.TextArea(
-                    "示例:使用Type或静态方法 如:使用GameObject.AddComonent(typeof(ParticleSystem)), \n 在最下方 写入 GameObject = UnityEngine.GameObject 和 ParticleSystem = UnityEngine.ParticleSystem \n  \n 调用方法使用冒号 ':' 如 transform: Rotate, 属性和字段'.'点号不变 \n 构造实例不需要 new, 变量无需声明类型, 如: angle = Vector3(45, 0, 0) \n 常用的语句: \n if a > 0 then\n ...\n end " +
-                    "\n\n  if a>0 then\n  ... \n elseif a=10 then \n  ...\n  else\n  ... \n end \n\n while a>0 do \n ... end \n \nfor index= 0, 10 ,(从0-10的增值幅度,默认1,可不写) do\n  ...break 或 return 中止跳出循环  \nend \n \nfor index, value in pairs(字典或table) do\n  index 指数 ,value 值... 中止  \nend  \n repeat ...\n  until a>0 \n 遍历数组,列表或字典 local iter = myDiectionary:GetEnumerator() \n while iter:MoveNext() do\n  print(iter.Current.Key..iter.Current.Value)\n end \r \n\n赋值: 字符串: a = 'hello'\n num = num+1 ,无++ 或-- , a,b=5,6 等同" +
-                    " a=5 b=6 ,x, y = y, x 可以交换数值(计算好后才赋值) \n 方法外声明的变量 j = 10 是全局变量  \r\n local i = 1 有local 是局部变量 \n nil是空 不是null  \n 获取type:  type(gameobject)  获得字符串: tostring(10) 字符串用双引号和单引号都可以; \n\n 表格 Table : 新建表格 myTable={} ; myTable={ 1,'jame',gameobject} 可以传入任意类型的值, 默认索引以1开始\n" +
-                    " 可以使用字符做key myTable['myKey']=myObject,字符串做索引还可以用myTable.myKey形式 \n 也可以用数字做key,如:return myTable[2], \n\n 算数符: +(加) -(减) *(乘) /(除) %(取余) ^(乘幂: 10^2=100) -(负号: -100) \n\n 关系运算符: == 等于 ~=不等于 >大于 <小于 >= <= \n \n逻辑运算符: and(相当于&&) or(相当于||) not(相当于!)+\n\n 其他运算符: .. 字符串相加 # 字符长度(#hello 为5 ,也可用于table的count数值) \n\n 数学库:" +
-                    "圆周率: math.pi  \n绝对值math.abs(-15)=15 ; \nmath.ceil(5.8)=6 ;\nmath.floor(5.6)=5 ;\n取模运算:math.mod(14, 5)=4 ;\n最大值: math.max(2.71, 100, -98, 23)=100 ;\n最小值 math.min ; \n得到x的y次方: math.pow(2, 5)=32 ;  \n开平方函数: math.sqrt(16)=4;角度转弧度: 3.14159265358 ;\n 弧度转角度: math.deg(math.pi)=180 ;\n 获取随机数: math.random(1, 100) ;\n设置随机数种子:math.randomseed(os.time()) 在使用math.random函数之前必须使用此函数设置随机数种子  ;\n正弦: math.sin(math.rad(30))=0.5 ; \n反正弦函数:math.asin(0.5)=0.52359877 ;");
+                GUILayout.TextArea(LuaManager.Instance.luaGamma);
         }
         [HideInInspector]
         public string recordFunctionBody;
@@ -1026,38 +924,6 @@ namespace NodeCanvas.Tasks.Actions
             return inputString;
         }
 
-        public void ConvertCSharpScript()
-        {
-            string p = @"^\s*"; //消除开头空格
-            var result = Regex.Matches(functionBody, p);
-            result.Cast<Match>().Select(x => x.Value).ForEach(y => { functionBody = Regex.Replace(functionBody, y, ""); });
-
-            //string p2 = @"\.[A-Z]+?"; //将方法前的点好换成冒号
-            //var result2 = Regex.Matches(functionBody, p2);
-            //result2.Cast<Match>().Select(x => x.Value).ForEach(y =>
-            //{
-            //    //Debug.Log(y);
-            //    functionBody = Regex.Replace(functionBody, y, y.Replace(".",":")); });
-
-            string p3 = @"\s*?var\s+?"; //将var 改成local
-            var result3 = Regex.Matches(functionBody, p3);
-            result3.Cast<Match>().Select(x => x.Value).ForEach(y =>
-            {
-                //Debug.Log(y);
-                functionBody = Regex.Replace(functionBody, y, y.Replace("var", "local"));
-            });
-            string p4 = @"\df"; //将数值后的f 改成空
-            var fresult = Regex.Matches(functionBody, p4);
-            fresult.Cast<Match>().Select(x => x.Value).ForEach(y =>
-            {
-                //Debug.Log(y);
-                functionBody = Regex.Replace(functionBody, y, y.Replace("f", ""));
-            });
-
-            functionBody = functionBody.Replace(";", ""); //移除封号
-            functionBody = functionBody.Replace("new ", ""); //移除new 
-            functionBody = functionBody.Replace("\"", "\'"); //双引号改单引号
-        }
 #endif
 
     }
@@ -1117,7 +983,6 @@ namespace FlowCanvas.Nodes
             return functionHead;
         }
         LuaState lua;
-        //FlowOutput outPut;
         List<ValueInput> ins;
         LuaResLoader lrl;
         protected override void RegisterPorts()
@@ -1130,15 +995,6 @@ namespace FlowCanvas.Nodes
 
                 ins.Add(AddValueInput(def.name, def.type, def.ID));
             }
-            //outPut = AddFlowOutput("Out");
-            //AddFlowInput("Call", f =>
-            //{
-
-            //    Invoke();
-
-            //    outPut.Call(f);
-
-            //});
         }
 
         void Invoke()
@@ -1150,7 +1006,7 @@ namespace FlowCanvas.Nodes
             }
             //string cs = "  currentSelection ={} \n  currentSelectionList ={} \n";
             string cs = "  currentSelection ={} \n";
-            string luacode = string.Format("{0}\n{1}\n{2}\n{3}\n {4}"  , UpdateFunctionHead(), functionBody, endPart, endBody, cs + setCurrentSelectionFunction );
+            string luacode = string.Format("{0}\n{1}\n{2}\n{3}\n {4}", UpdateFunctionHead(), functionBody, endPart, endBody, cs + setCurrentSelectionFunction);
             if (lrl == null)
             {
                 lrl = new LuaResLoader();
@@ -1162,7 +1018,6 @@ namespace FlowCanvas.Nodes
             LuaBinder.Bind(lua);
 
             lua.DoString(luacode);
-            //Debug.Log(luacode);
 
             luaFunc = lua.GetFunction("this." + functionName);
 
@@ -1170,8 +1025,6 @@ namespace FlowCanvas.Nodes
 
             var setCS = lua.GetFunction("this.SetCurrentSelection");
             setCS.Call<GameObject>(UnityEditor.Selection.activeGameObject);
-            //var setCSL = lua.GetFunction("this.SetCurrentSelectionList");
-            //setCSL.Call<GameObject[]>(UnityEditor.Selection.gameObjects);
 
 #endif
             switch (ins.Count)
@@ -1231,6 +1084,20 @@ namespace FlowCanvas.Nodes
         public List<string> outParaNameList = new List<string>();
         void ButtonClick()
         {
+            //graph.agent.GetComponent<FlowScriptController>().StartBehaviour();
+            ////for (var i = 0; i < graph.allNodes.Count; i++)
+            ////{
+            ////    if (graph.allNodes[i] is FlowNode)
+            ////    {
+            ////        var flowNode = (FlowNode)graph.allNodes[i];
+            ////        flowNode.BindPorts();
+            ////        flowNode.AssignSelfInstancePort();
+            ////    }
+            ////}
+
+            //Invoke();
+
+            //graph.agent.GetComponent<FlowScriptController>().StopBehaviour();
             for (var i = 0; i < graph.allNodes.Count; i++)
             {
                 if (graph.allNodes[i] is FlowNode)
@@ -1259,7 +1126,6 @@ namespace FlowCanvas.Nodes
         {
             if (GUILayout.Button("Execute"))
             {
-                UpdateFunctionHead();
                 ButtonClick();
             }
             GUIStyle textAreaStyle = new GUIStyle();
@@ -1272,9 +1138,8 @@ namespace FlowCanvas.Nodes
             textAreaStyle.richText = true;
 
             functionName = EditorGUILayout.TextField("functionName", functionName);
-
-            EditorGUILayout.TextArea(functionHead);
-
+            UpdateFunctionHead();
+            GUILayout.Label(functionHead);
 
             if (!highLightVariable)
                 functionBody = EditorGUILayout.TextArea(functionBody);
@@ -1306,12 +1171,7 @@ namespace FlowCanvas.Nodes
             }
             showExample = GUILayout.Toggle(showExample, "ShowLuaExample");
             if (showExample)
-                GUILayout.TextArea(
-                    "示例:使用Type或静态方法 如:使用GameObject.AddComonent(typeof(ParticleSystem)), \n 在最下方 写入 GameObject = UnityEngine.GameObject 和 ParticleSystem = UnityEngine.ParticleSystem \n  \n 调用方法使用冒号 ':' 如 transform: Rotate, 属性和字段'.'点号不变 \n 构造实例不需要 new, 变量无需声明类型, 如: angle = Vector3(45, 0, 0) \n 常用的语句: \n if a > 0 then\n ...\n end " +
-                    "\n\n  if a>0 then\n  ... \n elseif a=10 then \n  ...\n  else\n  ... \n end \n\n while a>0 do \n ... end \n \nfor index= 0, 10 ,(从0-10的增值幅度,默认1,可不写) do\n  ...break 或 return 中止跳出循环  \nend \n \nfor index, value in pairs(字典或table) do\n  index 指数 ,value 值... 中止  \nend  \n repeat ...\n  until a>0 \n 遍历数组,列表或字典 local iter = myDiectionary:GetEnumerator() \n while iter:MoveNext() do\n  print(iter.Current.Key..iter.Current.Value)\n end \r \n\n赋值: 字符串: a = 'hello'\n num = num+1 ,无++ 或-- , a,b=5,6 等同" +
-                    " a=5 b=6 ,x, y = y, x 可以交换数值(计算好后才赋值) \n 方法外声明的变量 j = 10 是全局变量  \r\n local i = 1 有local 是局部变量 \n nil是空 不是null  \n 获取type:  type(gameobject)  获得字符串: tostring(10) 字符串用双引号和单引号都可以; \n\n 表格 Table : 新建表格 myTable={} ; myTable={ 1,'jame',gameobject} 可以传入任意类型的值, 默认索引以1开始\n" +
-                    " 可以使用字符做key myTable['myKey']=myObject,字符串做索引还可以用myTable.myKey形式 \n 也可以用数字做key,如:return myTable[2], \n\n 算数符: +(加) -(减) *(乘) /(除) %(取余) ^(乘幂: 10^2=100) -(负号: -100) \n\n 关系运算符: == 等于 ~=不等于 >大于 <小于 >= <= \n \n逻辑运算符: and(相当于&&) or(相当于||) not(相当于!)+\n\n 其他运算符: .. 字符串相加 # 字符长度(#hello 为5 ,也可用于table的count数值) \n\n 数学库:" +
-                    "圆周率: math.pi  \n绝对值math.abs(-15)=15 ; \nmath.ceil(5.8)=6 ;\nmath.floor(5.6)=5 ;\n取模运算:math.mod(14, 5)=4 ;\n最大值: math.max(2.71, 100, -98, 23)=100 ;\n最小值 math.min ; \n得到x的y次方: math.pow(2, 5)=32 ;  \n开平方函数: math.sqrt(16)=4;角度转弧度: 3.14159265358 ;\n 弧度转角度: math.deg(math.pi)=180 ;\n 获取随机数: math.random(1, 100) ;\n设置随机数种子:math.randomseed(os.time()) 在使用math.random函数之前必须使用此函数设置随机数种子  ;\n正弦: math.sin(math.rad(30))=0.5 ; \n反正弦函数:math.asin(0.5)=0.52359877 ;");
+                GUILayout.TextArea(LuaManager.Instance.luaGamma);
         }
 
         public string recordFunctionBody;
@@ -1379,13 +1239,6 @@ namespace FlowCanvas.Nodes
             var result = Regex.Matches(functionBody, p);
             result.Cast<Match>().Select(x => x.Value).ForEach(y => { functionBody = Regex.Replace(functionBody, y, ""); });
 
-            //string p2 = @"\.[A-Z]+?"; //将方法前的点好换成冒号
-            //var result2 = Regex.Matches(functionBody, p2);
-            //result2.Cast<Match>().Select(x => x.Value).ForEach(y =>
-            //{
-            //    //Debug.Log(y);
-            //    functionBody = Regex.Replace(functionBody, y, y.Replace(".",":")); });
-
             string p3 = @"\s*?var\s+?"; //将var 改成local
             var result3 = Regex.Matches(functionBody, p3);
             result3.Cast<Match>().Select(x => x.Value).ForEach(y =>
@@ -1409,10 +1262,10 @@ namespace FlowCanvas.Nodes
         #region port Define
         [HideInInspector]
         [SerializeField]
-        public List<DynamicPortDefinition> inputDefinitions =
-            new List<DynamicPortDefinition>();
+        public List<DynamicParameterDefinition> inputDefinitions =
+            new List<DynamicParameterDefinition>();
 
-        public bool AddInputDefinition(DynamicPortDefinition def)
+        public bool AddInputDefinition(DynamicParameterDefinition def)
         {
             if (inputDefinitions.Find(d => d.ID == def.ID) == null)
             {
@@ -1429,7 +1282,7 @@ namespace FlowCanvas.Nodes
             {
                 menu.AddItem(new GUIContent(string.Format("增加该输入类型的port '{0}'", port.name)), false, () =>
                 {
-                    var def = new DynamicPortDefinition(port.name, port.type);
+                    var def = new DynamicParameterDefinition(port.name, port.type);
                     if (AddInputDefinition(def))
                     {
                         UpdateFunctionHead();
@@ -1442,60 +1295,40 @@ namespace FlowCanvas.Nodes
         }
 
 
-        private Vector2 nodeView;
-        public bool showAllNode = true;
         protected override void OnNodeGUI()
         {
             //UpdateFunctionHead();
             base.OnNodeGUI();
+            GUILayout.Space(10);
             if (GUILayout.Button("Execute"))
             {
                 ButtonClick();
             }
-            if (showAllNode)
+
+            GUILayout.Label("传入参数:");
+
+            EditorUtils.ReorderableList(inputDefinitions, (i, j) =>
             {
-                GUILayout.Label("传入参数:");
-
-                EditorUtils.ReorderableList(inputDefinitions, (i, j) =>
+                var def = inputDefinitions[i];
+                GUILayout.BeginHorizontal();
+                def.name = EditorGUILayout.TextField(def.name, GUILayout.Width(100),
+                    GUILayout.ExpandWidth(true));
+                GUILayout.Label(def.type.FriendlyName(), GUILayout.Width(100), GUILayout.ExpandWidth(true));
+                if (GUILayout.Button("X", GUILayout.Width(20)))
                 {
-                    var def = inputDefinitions[i];
-                    GUILayout.BeginHorizontal();
-                    def.name = EditorGUILayout.TextField(def.name, GUILayout.Width(0),
-                        GUILayout.ExpandWidth(true));
-                    GUILayout.Label(def.type.FriendlyName(), GUILayout.Width(0), GUILayout.ExpandWidth(true));
-                    if (GUILayout.Button("X", GUILayout.Width(20)))
-                    {
-                        inputDefinitions.RemoveAt(i);
-                        GatherPorts();
-                        UpdateFunctionHead();
-                    }
-                    GUILayout.EndHorizontal();
-                });
-                functionName = EditorGUILayout.TextField("functionName", functionName);
-
-                EditorGUILayout.LabelField(functionHead);
-
-                nodeView = GUILayout.BeginScrollView(nodeView, true, false, GUILayout.Width(280), GUILayout.Height(150));
-
-                if (!highLightVariable)
-                    functionBody = EditorGUILayout.TextArea(functionBody, GUILayout.Width(260));
-                else
-                {
-                    //GUIStyle s= new GUIStyle();
-                    //s.richText = true;
-                    EditorGUILayout.TextArea(functionBody, GUILayout.Width(260));
+                    inputDefinitions.RemoveAt(i);
+                    GatherPorts();
+                    UpdateFunctionHead();
                 }
-                EditorGUILayout.LabelField(endPart);
-                //endBody = EditorGUILayout.TextArea(endBody);
-                GUILayout.EndScrollView();
-
-            }
+                GUILayout.EndHorizontal();
+            });     
+                    
 
             if (GUILayout.Button("增加输入参数"))
             {
                 EditorUtils.ShowPreferedTypesSelectionMenu(typeof(object), t =>
                 {
-                    AddInputDefinition(new DynamicPortDefinition("value", t));
+                    AddInputDefinition(new DynamicParameterDefinition("value", t));
                     GatherPorts();
                     UpdateFunctionHead();
                 });
@@ -1505,10 +1338,7 @@ namespace FlowCanvas.Nodes
                 GatherPorts();
                 UpdateFunctionHead();
             }
-            if (GUILayout.Button(!showAllNode ? "显示代码" : "折叠"))
-            {
-                showAllNode = !showAllNode;
-            }
+
         }
 
 
@@ -1526,7 +1356,7 @@ namespace FlowCanvas.Nodes
         public string functionName = "LuaMethod";
         public string functionBody = "\n  \n   \n ";
 
-        public bool invokeOnly = false;
+        public bool InvokeOnly = false;
 
         public virtual string endPart
         {
@@ -1566,7 +1396,7 @@ namespace FlowCanvas.Nodes
         {
             base.OnGraphStarted();
 
-            if (invokeOnly)
+            if (InvokeOnly)
                 return;
 
 #if UNITY_EDITOR
@@ -1580,92 +1410,7 @@ namespace FlowCanvas.Nodes
 
             if (!Combined)
             {
-                List<Graph> allGraphs = new List<Graph>();
-
-                var rootGraph = graph.agent.GetComponent<GraphOwner>().graph;
-                var childGraph = rootGraph.GetAllNestedGraphs<Graph>(true);
-
-                allGraphs.Add(rootGraph);
-                allGraphs.AddRange(childGraph);
-
-                List<LuaActionBase> allLuaAction = new List<LuaActionBase>();
-                List<LuaCondition> allLuaCondition = new List<LuaCondition>();
-                List<CallLuaMethodBase> allLuaNode = new List<CallLuaMethodBase>();
-                allGraphs.ForEach(x =>
-                {
-                    allLuaAction.AddRange(x.GetAllTasksOfType<LuaActionBase>());
-                });
-                allGraphs.ForEach(x =>
-                {
-                    allLuaCondition.AddRange(x.GetAllTasksOfType<LuaCondition>());
-                });
-                allGraphs.ForEach(x =>
-                {
-                    allLuaNode.AddRange(x.GetAllNodesOfType<CallLuaMethodBase>());
-                });
-
-                allLuaAction.ForEach(x =>
-                {
-                    if (!x.Combined)
-                    {
-                        x.Combined = true;//其他luaNode不需要再初始化了
-
-                        x.UpdateFunctionHead();
-
-                        LuaManager.Instance.AddFunction(x.functionName, x.functionHead, x.functionBody);
-
-                        string[] endbodyWithoutBlank = x.endBody.Replace(" ", "").Split('\n');
-                        endbodyWithoutBlank.ForEach(y =>
-                        {
-                            if (!LuaManager.Instance.endParts.Contains(y))
-                            {
-                                LuaManager.Instance.endParts.Add(y);
-                            }
-                        });
-                    }
-                });
-
-                allLuaCondition.ForEach(x =>
-                {
-                    if (!x.Combined)
-                    {
-                        x.Combined = true;//其他luaNode不需要再初始化了
-                        x.UpdateFunctionHead();
-
-                        LuaManager.Instance.AddFunction(x.functionName, x.functionHead, x.functionBody);
-
-                        string[] endbodyWithoutBlank = x.endBody.Replace(" ", "").Split('\n');
-                        endbodyWithoutBlank.ForEach(y =>
-                        {
-                            if (!LuaManager.Instance.endParts.Contains(y))
-                            {
-                                LuaManager.Instance.endParts.Add(y);
-                            }
-                        });
-                    }
-                });
-
-                allLuaNode.ForEach(x =>
-                {
-                    if (!x.Combined)
-                    {
-                        x.Combined = true;//其他luaNode不需要再初始化了
-                        x.UpdateFunctionHead();
-
-                        LuaManager.Instance.AddFunction(x.functionName, x.functionHead, x.functionBody);
-
-                        string[] endbodyWithoutBlank = x.endBody.Replace(" ", "").Split('\n');
-                        endbodyWithoutBlank.ForEach(y =>
-                        {
-                            if (!LuaManager.Instance.endParts.Contains(y))
-                            {
-                                LuaManager.Instance.endParts.Add(y);
-                            }
-                        });
-                    }
-                });
-
-                LuaManager.Instance.UpdateScript();
+                LuaManager.Instance.SearchCurrentGraphAllLuaMethod(graphAgent);
                 Combined = true;
             }
         }
@@ -1675,20 +1420,12 @@ namespace FlowCanvas.Nodes
             luaFunc = LuaManager.Instance.GetLuaFunction(functionName);
         }
 
-        //public override void OnGraphStoped()
-        //{
-        //    base.OnGraphStoped();
-        //    if (luaFunc != null)
-        //    {
-        //        luaFunc.Dispose();
-        //        luaFunc = null;
-        //    }
-        //}
 
         public List<string> outParaNameList = new List<string>();
 #if UNITY_EDITOR
         public bool showExample;
         public bool highLightVariable;
+        bool hasInvokeTarget;
         protected override void OnNodeInspectorGUI()
         {
             GUIStyle textAreaStyle = new GUIStyle();
@@ -1699,13 +1436,30 @@ namespace FlowCanvas.Nodes
             textAreaStyle.focused.textColor = new Color(0.8f, 0.8f, 0.8f);
             textAreaStyle.margin = new RectOffset(5, 5, 5, 5);
             textAreaStyle.richText = true;
-            if (!invokeOnly)
+
+            if (!InvokeOnly)
                 GUILayout.Label("FunctionName 不能重名");
             functionName = EditorGUILayout.TextField("functionName", functionName);
 
-            EditorGUILayout.TextArea(functionHead);
 
-            if (invokeOnly)
+            if (InvokeOnly && GUILayout.Button("UpdateInvokeMethodString"))
+            {
+                LuaManager.Instance.SearchCurrentGraphAllLuaMethod(graphAgent);
+                string functionBody = "";
+                LuaManager.Instance.functionDicts.TryGetValue( functionName,out functionBody);
+                hasInvokeTarget = !string.IsNullOrEmpty(functionBody);
+            }
+            if (InvokeOnly)
+                GUILayout.Label(hasInvokeTarget ? LuaManager.Instance.functionDicts[functionName]+"\nend" : "    Null");
+            else
+            {
+                UpdateFunctionHead();
+                GUILayout.Label(functionHead);
+            }
+
+         
+
+            if (InvokeOnly)
                 return;
 
             if (!highLightVariable)
@@ -1732,18 +1486,9 @@ namespace FlowCanvas.Nodes
                 highLightVariable = !highLightVariable;
             }
 
-            if (GUILayout.Button("ConvertC#ToLua"))
-            {
-                ConvertCSharpScript();
-            }
             showExample = GUILayout.Toggle(showExample, "ShowLuaExample");
             if (showExample)
-                GUILayout.TextArea(
-                    "示例:使用Type或静态方法 如:使用GameObject.AddComonent(typeof(ParticleSystem)), \n 在最下方 写入 GameObject = UnityEngine.GameObject 和 ParticleSystem = UnityEngine.ParticleSystem \n  \n 调用方法使用冒号 ':' 如 transform: Rotate, 属性和字段'.'点号不变 \n 构造实例不需要 new, 变量无需声明类型, 如: angle = Vector3(45, 0, 0) \n 常用的语句: \n if a > 0 then\n ...\n end " +
-                    "\n\n  if a>0 then\n  ... \n elseif a=10 then \n  ...\n  else\n  ... \n end \n\n while a>0 do \n ... end \n \nfor index= 0, 10 ,(从0-10的增值幅度,默认1,可不写) do\n  ...break 或 return 中止跳出循环  \nend \n \nfor index, value in pairs(字典或table) do\n  index 指数 ,value 值... 中止  \nend  \n repeat ...\n  until a>0 \n 遍历数组,列表或字典 local iter = myDiectionary:GetEnumerator() \n while iter:MoveNext() do\n  print(iter.Current.Key..iter.Current.Value)\n end \r \n\n赋值: 字符串: a = 'hello'\n num = num+1 ,无++ 或-- , a,b=5,6 等同" +
-                    " a=5 b=6 ,x, y = y, x 可以交换数值(计算好后才赋值) \n 方法外声明的变量 j = 10 是全局变量  \r\n local i = 1 有local 是局部变量 \n nil是空 不是null  \n 获取type:  type(gameobject)  获得字符串: tostring(10) 字符串用双引号和单引号都可以; \n\n 表格 Table : 新建表格 myTable={} ; myTable={ 1,'jame',gameobject} 可以传入任意类型的值, 默认索引以1开始\n" +
-                    " 可以使用字符做key myTable['myKey']=myObject,字符串做索引还可以用myTable.myKey形式 \n 也可以用数字做key,如:return myTable[2], \n\n 算数符: +(加) -(减) *(乘) /(除) %(取余) ^(乘幂: 10^2=100) -(负号: -100) \n\n 关系运算符: == 等于 ~=不等于 >大于 <小于 >= <= \n \n逻辑运算符: and(相当于&&) or(相当于||) not(相当于!)+\n\n 其他运算符: .. 字符串相加 # 字符长度(#hello 为5 ,也可用于table的count数值) \n\n 数学库:" +
-                    "圆周率: math.pi  \n绝对值math.abs(-15)=15 ; \nmath.ceil(5.8)=6 ;\nmath.floor(5.6)=5 ;\n取模运算:math.mod(14, 5)=4 ;\n最大值: math.max(2.71, 100, -98, 23)=100 ;\n最小值 math.min ; \n得到x的y次方: math.pow(2, 5)=32 ;  \n开平方函数: math.sqrt(16)=4;角度转弧度: 3.14159265358 ;\n 弧度转角度: math.deg(math.pi)=180 ;\n 获取随机数: math.random(1, 100) ;\n设置随机数种子:math.randomseed(os.time()) 在使用math.random函数之前必须使用此函数设置随机数种子  ;\n正弦: math.sin(math.rad(30))=0.5 ; \n反正弦函数:math.asin(0.5)=0.52359877 ;");
+                GUILayout.TextArea(LuaManager.Instance.luaGamma);
         }
 
         public string recordFunctionBody;
@@ -1805,38 +1550,6 @@ namespace FlowCanvas.Nodes
             return inputString;
         }
 
-        public void ConvertCSharpScript()
-        {
-            string p = @"^\s*"; //消除开头空格
-            var result = Regex.Matches(functionBody, p);
-            result.Cast<Match>().Select(x => x.Value).ForEach(y => { functionBody = Regex.Replace(functionBody, y, ""); });
-
-            //string p2 = @"\.[A-Z]+?"; //将方法前的点好换成冒号
-            //var result2 = Regex.Matches(functionBody, p2);
-            //result2.Cast<Match>().Select(x => x.Value).ForEach(y =>
-            //{
-            //    //Debug.Log(y);
-            //    functionBody = Regex.Replace(functionBody, y, y.Replace(".",":")); });
-
-            string p3 = @"\s*?var\s+?"; //将var 改成local
-            var result3 = Regex.Matches(functionBody, p3);
-            result3.Cast<Match>().Select(x => x.Value).ForEach(y =>
-            {
-                //Debug.Log(y);
-                functionBody = Regex.Replace(functionBody, y, y.Replace("var", "local"));
-            });
-            string p4 = @"\df"; //将数值后的f 改成空
-            var fresult = Regex.Matches(functionBody, p4);
-            fresult.Cast<Match>().Select(x => x.Value).ForEach(y =>
-            {
-                //Debug.Log(y);
-                functionBody = Regex.Replace(functionBody, y, y.Replace("f", ""));
-            });
-
-            functionBody = functionBody.Replace(";", ""); //移除封号
-            functionBody = functionBody.Replace("new ", ""); //移除new 
-            functionBody = functionBody.Replace("\"", "\'"); //双引号改单引号
-        }
 #endif
     }
 
@@ -1949,10 +1662,10 @@ namespace FlowCanvas.Nodes
         #region port Define
         [HideInInspector]
         [SerializeField]
-        public List<DynamicPortDefinition> inputDefinitions =
-            new List<DynamicPortDefinition>();
+        public List<DynamicParameterDefinition> inputDefinitions =
+            new List<DynamicParameterDefinition>();
 
-        public bool AddInputDefinition(DynamicPortDefinition def)
+        public bool AddInputDefinition(DynamicParameterDefinition def)
         {
             if (inputDefinitions.Find(d => d.ID == def.ID) == null)
             {
@@ -1969,7 +1682,7 @@ namespace FlowCanvas.Nodes
             {
                 menu.AddItem(new GUIContent(string.Format("增加该输入类型的port '{0}'", port.name)), false, () =>
                 {
-                    var def = new DynamicPortDefinition(port.name, port.type);
+                    var def = new DynamicParameterDefinition(port.name, port.type);
                     if (AddInputDefinition(def))
                     {
                         UpdateFunctionHead();
@@ -1982,62 +1695,37 @@ namespace FlowCanvas.Nodes
         }
 
 
-        private Vector2 nodeView;
-        public bool showAllNode = true;
         protected override void OnNodeGUI()
         {
             //UpdateFunctionHead();
             base.OnNodeGUI();
 
-            invokeOnly = GUILayout.Toggle(invokeOnly, "InvokeOnly");
+            InvokeOnly = GUILayout.Toggle(InvokeOnly, "InvokeOnly");
 
+            GUILayout.Label("传入参数:");
 
-            if (showAllNode)
+            EditorUtils.ReorderableList(inputDefinitions, (i, j) =>
             {
-                GUILayout.Label("传入参数:");
-
-                EditorUtils.ReorderableList(inputDefinitions, (i, j) =>
+                var def = inputDefinitions[i];
+                GUILayout.BeginHorizontal();
+                def.name = EditorGUILayout.TextField(def.name, GUILayout.Width(100),
+                    GUILayout.ExpandWidth(true));
+                GUILayout.Label(def.type.FriendlyName(), GUILayout.Width(100), GUILayout.ExpandWidth(true));
+                if (GUILayout.Button("X", GUILayout.Width(20)))
                 {
-                    var def = inputDefinitions[i];
-                    GUILayout.BeginHorizontal();
-                    def.name = EditorGUILayout.TextField(def.name, GUILayout.Width(0),
-                        GUILayout.ExpandWidth(true));
-                    GUILayout.Label(def.type.FriendlyName(), GUILayout.Width(0), GUILayout.ExpandWidth(true));
-                    if (GUILayout.Button("X", GUILayout.Width(20)))
-                    {
-                        inputDefinitions.RemoveAt(i);
-                        GatherPorts();
-                        UpdateFunctionHead();
-                    }
-                    GUILayout.EndHorizontal();
-                });
-                functionName = EditorGUILayout.TextField("functionName", functionName);
-
-                EditorGUILayout.LabelField(functionHead);
-
-                if (!invokeOnly)
-                {
-                    nodeView = GUILayout.BeginScrollView(nodeView, true, false, GUILayout.Width(280), GUILayout.Height(150));
-
-                    if (!highLightVariable)
-                        functionBody = EditorGUILayout.TextArea(functionBody, GUILayout.Width(260));
-                    else
-                    {
-                        //GUIStyle s= new GUIStyle();
-                        //s.richText = true;
-                        EditorGUILayout.TextArea(functionBody, GUILayout.Width(260));
-                    }
-                    EditorGUILayout.LabelField(endPart);
-                    //endBody = EditorGUILayout.TextArea(endBody);
-                    GUILayout.EndScrollView();
+                    inputDefinitions.RemoveAt(i);
+                    GatherPorts();
+                    UpdateFunctionHead();
                 }
-            }
+                GUILayout.EndHorizontal();
+            });
+
 
             if (GUILayout.Button("增加输入参数"))
             {
                 EditorUtils.ShowPreferedTypesSelectionMenu(typeof(object), t =>
                 {
-                    AddInputDefinition(new DynamicPortDefinition("value", t));
+                    AddInputDefinition(new DynamicParameterDefinition("value", t));
                     GatherPorts();
                     UpdateFunctionHead();
                 });
@@ -2047,10 +1735,7 @@ namespace FlowCanvas.Nodes
                 GatherPorts();
                 UpdateFunctionHead();
             }
-            if (GUILayout.Button(!showAllNode ? "显示代码" : "折叠"))
-            {
-                showAllNode = !showAllNode;
-            }
+
         }
 
 
@@ -2165,10 +1850,10 @@ namespace FlowCanvas.Nodes
         #region port Define
         [HideInInspector]
         [SerializeField]
-        public List<DynamicPortDefinition> inputDefinitions =
-            new List<DynamicPortDefinition>();
+        public List<DynamicParameterDefinition> inputDefinitions =
+            new List<DynamicParameterDefinition>();
 
-        public bool AddInputDefinition(DynamicPortDefinition def)
+        public bool AddInputDefinition(DynamicParameterDefinition def)
         {
             if (inputDefinitions.Find(d => d.ID == def.ID) == null)
             {
@@ -2187,7 +1872,7 @@ namespace FlowCanvas.Nodes
             {
                 menu.AddItem(new GUIContent(string.Format("增加该输入类型的port '{0}'", port.name)), false, () =>
                 {
-                    var def = new DynamicPortDefinition(port.name, port.type);
+                    var def = new DynamicParameterDefinition(port.name, port.type);
                     if (AddInputDefinition(def))
                     {
                         UpdateFunctionHead();
@@ -2199,58 +1884,37 @@ namespace FlowCanvas.Nodes
             return menu;
         }
 
-        private Vector2 nodeView;
-        public bool showAllNode = true;
+
         protected override void OnNodeGUI()
         {
             //UpdateFunctionHead();
             base.OnNodeGUI();
-            invokeOnly = GUILayout.Toggle(invokeOnly, "InvokeOnly");
+            InvokeOnly = GUILayout.Toggle(InvokeOnly, "InvokeOnly");
 
-            if (showAllNode)
+            GUILayout.Label("传入参数:");
+
+            EditorUtils.ReorderableList(inputDefinitions, (i, j) =>
             {
-                GUILayout.Label("传入参数:");
-
-                EditorUtils.ReorderableList(inputDefinitions, (i, j) =>
+                var def = inputDefinitions[i];
+                GUILayout.BeginHorizontal();
+                def.name = EditorGUILayout.TextField(def.name, GUILayout.Width(100),
+                    GUILayout.ExpandWidth(true));
+                GUILayout.Label(def.type.FriendlyName(), GUILayout.Width(100), GUILayout.ExpandWidth(true));
+                if (GUILayout.Button("X", GUILayout.Width(20)))
                 {
-                    var def = inputDefinitions[i];
-                    GUILayout.BeginHorizontal();
-                    def.name = EditorGUILayout.TextField(def.name, GUILayout.Width(0),
-                        GUILayout.ExpandWidth(true));
-                    GUILayout.Label(def.type.FriendlyName(), GUILayout.Width(0), GUILayout.ExpandWidth(true));
-                    if (GUILayout.Button("X", GUILayout.Width(20)))
-                    {
-                        inputDefinitions.RemoveAt(i);
-                        GatherPorts();
-                        UpdateFunctionHead();
-                    }
-                    GUILayout.EndHorizontal();
-                });
-                functionName = EditorGUILayout.TextField("functionName", functionName);
-                EditorGUILayout.LabelField(functionHead);
-                if (!invokeOnly)
-                {
-                    nodeView = GUILayout.BeginScrollView(nodeView, true, false, GUILayout.Width(280), GUILayout.Height(150));
-
-                    if (!highLightVariable)
-                        functionBody = EditorGUILayout.TextArea(functionBody, GUILayout.Width(260));
-                    else
-                    {
-                        //GUIStyle s= new GUIStyle();
-                        //s.richText = true;
-                        EditorGUILayout.TextArea(functionBody, GUILayout.Width(260));
-                    }
-                    EditorGUILayout.LabelField(endPart);
-                    //endBody = EditorGUILayout.TextArea(endBody);
-                    GUILayout.EndScrollView();
+                    inputDefinitions.RemoveAt(i);
+                    GatherPorts();
+                    UpdateFunctionHead();
                 }
-            }
+                GUILayout.EndHorizontal();
+            });
+
 
             if (GUILayout.Button("增加输入参数"))
             {
                 EditorUtils.ShowPreferedTypesSelectionMenu(typeof(object), t =>
                 {
-                    AddInputDefinition(new DynamicPortDefinition("value", t));
+                    AddInputDefinition(new DynamicParameterDefinition("value", t));
                     GatherPorts();
                     UpdateFunctionHead();
                 });
@@ -2260,10 +1924,7 @@ namespace FlowCanvas.Nodes
                 GatherPorts();
                 UpdateFunctionHead();
             }
-            if (GUILayout.Button(!showAllNode ? "显示代码" : "折叠"))
-            {
-                showAllNode = !showAllNode;
-            }
+
         }
 
 #endif
@@ -2384,52 +2045,30 @@ namespace FlowCanvas.Nodes
         #endregion
 #if UNITY_EDITOR
 
-        private Vector2 nodeView;
-        public bool showAllNode = true;
         protected override void OnNodeGUI()
         {
             //UpdateFunctionHead();
             base.OnNodeGUI();
-            invokeOnly = GUILayout.Toggle(invokeOnly, "InvokeOnly");
+            InvokeOnly = GUILayout.Toggle(InvokeOnly, "InvokeOnly");
 
-            if (showAllNode)
+            GUILayout.Label("传入参数:");
+
+            EditorUtils.ReorderableList(inputDefinitions, (i, j) =>
             {
-                GUILayout.Label("传入参数:");
-
-                EditorUtils.ReorderableList(inputDefinitions, (i, j) =>
+                var def = inputDefinitions[i];
+                GUILayout.BeginHorizontal();
+                inputDefinitions[i] = EditorGUILayout.TextField(def, GUILayout.Width(100),
+                GUILayout.ExpandWidth(true));
+                GUILayout.Label(typeof(T).FriendlyName(), GUILayout.Width(100), GUILayout.ExpandWidth(true));
+                if (GUILayout.Button("X", GUILayout.Width(20)))
                 {
-                    var def = inputDefinitions[i];
-                    GUILayout.BeginHorizontal();
-                    inputDefinitions[i] = EditorGUILayout.TextField(def, GUILayout.Width(0),
-                    GUILayout.ExpandWidth(true));
-                    GUILayout.Label(typeof(T).FriendlyName(), GUILayout.Width(0), GUILayout.ExpandWidth(true));
-                    if (GUILayout.Button("X", GUILayout.Width(20)))
-                    {
-                        inputDefinitions.RemoveAt(i);
-                        GatherPorts();
-                        UpdateFunctionHead();
-                    }
-                    GUILayout.EndHorizontal();
-                });
-                functionName = EditorGUILayout.TextField("functionName", functionName);
-                EditorGUILayout.LabelField(functionHead);
-                if (!invokeOnly)
-                {
-                    nodeView = GUILayout.BeginScrollView(nodeView, true, false, GUILayout.Width(280), GUILayout.Height(150));
-
-                    if (!highLightVariable)
-                        functionBody = EditorGUILayout.TextArea(functionBody, GUILayout.Width(260));
-                    else
-                    {
-                        //GUIStyle s= new GUIStyle();
-                        //s.richText = true;
-                        EditorGUILayout.TextArea(functionBody, GUILayout.Width(260));
-                    }
-                    EditorGUILayout.LabelField(endPart);
-                    //endBody = EditorGUILayout.TextArea(endBody);
-                    GUILayout.EndScrollView();
+                    inputDefinitions.RemoveAt(i);
+                    GatherPorts();
+                    UpdateFunctionHead();
                 }
-            }
+                GUILayout.EndHorizontal();
+            });
+            
 
             if (GUILayout.Button("增加输入参数"))
             {
@@ -2442,10 +2081,7 @@ namespace FlowCanvas.Nodes
                 GatherPorts();
                 UpdateFunctionHead();
             }
-            if (GUILayout.Button(!showAllNode ? "显示代码" : "折叠"))
-            {
-                showAllNode = !showAllNode;
-            }
+
         }
 
 #endif
@@ -2453,3 +2089,4 @@ namespace FlowCanvas.Nodes
     }
 }
 #endregion
+
