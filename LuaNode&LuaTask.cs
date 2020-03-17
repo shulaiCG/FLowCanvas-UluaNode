@@ -1,4 +1,4 @@
-
+//更新https://github.com/shulaiCG/FLowCanvas-UluaNode/edit/master/LuaNode&LuaTask.cs
 //要使用此节点需要下载 合并 ToLua的项目工程文件:  https://github.com/topameng/tolua
 //需要同时导入FlowCanvas和NodeCnavas插件才不会报错。
 using System.Collections.Generic;
@@ -494,10 +494,12 @@ namespace NodeCanvas.Tasks.Actions
                 LuaManager.Instance.functionDicts.TryGetValue(functionName, out functionBody);
                 hasInvokeTarget = !string.IsNullOrEmpty(functionBody);
             }
-            GUILayout.Label(hasInvokeTarget? LuaManager.Instance.functionDicts[functionName]:"    Null");
 
             if (InvokeOnly)
+            {
+                GUILayout.Label(hasInvokeTarget ? LuaManager.Instance.functionDicts[functionName] : "    Null");
                 return;
+            }
 
             if (!highLightVariable)
                 functionBody = EditorGUILayout.TextArea(functionBody);
@@ -888,9 +890,11 @@ namespace NodeCanvas.Tasks.Actions
                 LuaManager.Instance.functionDicts.TryGetValue(functionName, out functionBody);
                 hasInvokeTarget = !string.IsNullOrEmpty(functionBody);
             }
-            GUILayout.Label(hasInvokeTarget ? LuaManager.Instance.functionDicts[functionName] +"\nend": "    Null");
             if (InvokeOnly)
+            {
+                GUILayout.Label(hasInvokeTarget ? LuaManager.Instance.functionDicts[functionName] : "    Null");
                 return;
+            }
             if (!highLightVariable)
                 functionBody = EditorGUILayout.TextArea(functionBody);
             else
