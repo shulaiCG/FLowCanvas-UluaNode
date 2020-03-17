@@ -209,6 +209,48 @@ public class LuaManager : MonoBehaviour
         LuaManager.Instance.UpdateScript();
     }
 
+    public void ResetCurrentGraphCombinedState(Component nodeAgent)
+    {
+        List<Graph> allGraphs = new List<Graph>();
+
+        var rootGraph = nodeAgent.GetComponent<GraphOwner>().graph;
+        var childGraph = rootGraph.GetAllNestedGraphs<Graph>(true);
+
+        allGraphs.Add(rootGraph);
+        allGraphs.AddRange(childGraph);
+
+        List<LuaActionBase> allLuaAction = new List<LuaActionBase>();
+        List<LuaCondition> allLuaCondition = new List<LuaCondition>();
+        List<CallLuaMethodBase> allLuaNode = new List<CallLuaMethodBase>();
+        allGraphs.ForEach(x =>
+        {
+            allLuaAction.AddRange(x.GetAllTasksOfType<LuaActionBase>());
+        });
+        allGraphs.ForEach(x =>
+        {
+            allLuaCondition.AddRange(x.GetAllTasksOfType<LuaCondition>());
+        });
+        allGraphs.ForEach(x =>
+        {
+            allLuaNode.AddRange(x.GetAllNodesOfType<CallLuaMethodBase>());
+        });
+
+        allLuaAction.ForEach(x =>
+        {
+            x.Combined = false;
+        });
+
+        allLuaCondition.ForEach(x =>
+        {
+            x.Combined = false;
+        });
+
+        allLuaNode.ForEach(x =>
+        {
+            x.Combined = false;
+        });
+    }
+
 
     private void OnDestroy()
     {
@@ -439,9 +481,15 @@ namespace NodeCanvas.Tasks.Actions
             functionName = EditorGUILayout.TextField("functionName", functionName);
             EditorGUILayout.TextArea(functionHead, textAreaStyle);
 
-            if (InvokeOnly && GUILayout.Button("UpdateInvokeMethodString"))
+            if (InvokeOnly && GUILayout.Button("ShowInvokeLuaMethod"))
             {
-                LuaManager.Instance.SearchCurrentGraphAllLuaMethod(agent);
+                if (!Application.isPlaying)
+                {
+                    LuaManager.Instance.functionDicts.Clear();
+                    LuaManager.Instance.ResetCurrentGraphCombinedState(agent);
+                    LuaManager.Instance.SearchCurrentGraphAllLuaMethod(agent);
+                }
+
                 string functionBody = "";
                 LuaManager.Instance.functionDicts.TryGetValue(functionName, out functionBody);
                 hasInvokeTarget = !string.IsNullOrEmpty(functionBody);
@@ -827,9 +875,15 @@ namespace NodeCanvas.Tasks.Actions
 
             EditorGUILayout.TextArea(functionHead, textAreaStyle);
 
-            if (InvokeOnly && GUILayout.Button("UpdateInvokeMethodString"))
+            if (InvokeOnly && GUILayout.Button("ShowInvokeLuaMethod"))
             {
-                LuaManager.Instance.SearchCurrentGraphAllLuaMethod(agent);
+                if (!Application.isPlaying)
+                {
+                    LuaManager.Instance.functionDicts.Clear();
+                    LuaManager.Instance.ResetCurrentGraphCombinedState(agent);
+                    LuaManager.Instance.SearchCurrentGraphAllLuaMethod(agent);
+                }
+
                 string functionBody = "";
                 LuaManager.Instance.functionDicts.TryGetValue(functionName, out functionBody);
                 hasInvokeTarget = !string.IsNullOrEmpty(functionBody);
@@ -1442,8 +1496,13 @@ namespace FlowCanvas.Nodes
             functionName = EditorGUILayout.TextField("functionName", functionName);
 
 
-            if (InvokeOnly && GUILayout.Button("UpdateInvokeMethodString"))
-            {
+            if (InvokeOnly && GUILayout.Button("ShowInvokeLuaMethod"))
+            {   
+                if(!Application.isPlaying)
+                {
+                    LuaManager.Instance.functionDicts.Clear();
+                    LuaManager.Instance.ResetCurrentGraphCombinedState(graphAgent);
+                }
                 LuaManager.Instance.SearchCurrentGraphAllLuaMethod(graphAgent);
                 string functionBody = "";
                 LuaManager.Instance.functionDicts.TryGetValue( functionName,out functionBody);
