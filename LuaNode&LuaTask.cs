@@ -42,7 +42,7 @@ public class LuaManager : MonoBehaviour
             return _instance;
         }
     }
-
+    [TextArea(10,30)]
     public string luaScript = "";
 
     public Dictionary<string, string> functionDicts = new Dictionary<string, string>();
@@ -261,8 +261,8 @@ public class LuaManager : MonoBehaviour
     }
 
 #if UNITY_EDITOR
-
-    public string luaGamma = "示例:使用Type或静态方法 如:使用GameObject.AddComonent(typeof(ParticleSystem)), \n 在最下方 写入 GameObject = UnityEngine.GameObject 和 ParticleSystem = UnityEngine.ParticleSystem \n  \n 调用方法使用冒号 ':' 如 transform: Rotate, 属性和字段'.'点号不变 \n 构造实例不需要 new, 变量无需声明类型, 如: angle = Vector3(45, 0, 0) \n 常用的语句: \n if a > 0 then\n ...\n end " +
+    
+    public string luaGrammar = "示例:使用Type或静态方法 如:使用GameObject.AddComonent(typeof(ParticleSystem)), \n 在最下方 写入 GameObject = UnityEngine.GameObject 和 ParticleSystem = UnityEngine.ParticleSystem \n  \n 调用方法使用冒号 ':' 如 transform: Rotate, 属性和字段'.'点号不变 \n 构造实例不需要 new, 变量无需声明类型, 如: angle = Vector3(45, 0, 0) \n 常用的语句: \n if a > 0 then\n ...\n end " +
                     "\n\n  if a>0 then\n  ... \n elseif a=10 then \n  ...\n  else\n  ... \n end \n\n while a>0 do \n ... end \n \nfor index= 0, 10 ,(从0-10的增值幅度,默认1,可不写) do\n  ...break 或 return 中止跳出循环  \nend \n \nfor index, value in pairs(字典或table) do\n  index 指数 ,value 值... 中止  \nend  \n repeat ...\n  until a>0 \n 遍历数组,列表或字典 local iter = myDiectionary:GetEnumerator() \n while iter:MoveNext() do\n  print(iter.Current.Key..iter.Current.Value)\n end \r \n\n赋值: 字符串: a = 'hello'\n num = num+1 ,无++ 或-- , a,b=5,6 等同" +
                     " a=5 b=6 ,x, y = y, x 可以交换数值(计算好后才赋值) \n 方法外声明的变量 j = 10 是全局变量  \r\n local i = 1 有local 是局部变量 \n nil是空 不是null  \n 获取type:  type(gameobject)  获得字符串: tostring(10) 字符串用双引号和单引号都可以; \n\n 表格 Table : 新建表格 myTable={} ; myTable={ 1,'jame',gameobject} 可以传入任意类型的值, 默认索引以1开始\n" +
                     " 可以使用字符做key myTable['myKey']=myObject,字符串做索引还可以用myTable.myKey形式 \n 也可以用数字做key,如:return myTable[2], \n\n 算数符: +(加) -(减) *(乘) /(除) %(取余) ^(乘幂: 10^2=100) -(负号: -100) \n\n 关系运算符: == 等于 ~=不等于 >大于 <小于 >= <= \n \n逻辑运算符: and(相当于&&) or(相当于||) not(相当于!)+\n\n 其他运算符: .. 字符串相加 # 字符长度(#hello 为5 ,也可用于table的count数值) \n\n 数学库:" +
@@ -527,7 +527,7 @@ namespace NodeCanvas.Tasks.Actions
 
             showExample = GUILayout.Toggle(showExample, "ShowLuaExample");
             if (showExample)
-                GUILayout.TextArea(LuaManager.Instance.luaGamma);
+                GUILayout.TextArea(LuaManager.Instance.luaGrammar);
         }
         [HideInInspector]
         public string recordFunctionBody;
@@ -920,7 +920,7 @@ namespace NodeCanvas.Tasks.Actions
 
             showExample = GUILayout.Toggle(showExample, "ShowLuaExample");
             if (showExample)
-                GUILayout.TextArea(LuaManager.Instance.luaGamma);
+                GUILayout.TextArea(LuaManager.Instance.luaGrammar);
         }
         [HideInInspector]
         public string recordFunctionBody;
@@ -1229,7 +1229,7 @@ namespace FlowCanvas.Nodes
             }
             showExample = GUILayout.Toggle(showExample, "ShowLuaExample");
             if (showExample)
-                GUILayout.TextArea(LuaManager.Instance.luaGamma);
+                GUILayout.TextArea(LuaManager.Instance.luaGrammar);
         }
 
         public string recordFunctionBody;
@@ -1551,7 +1551,7 @@ namespace FlowCanvas.Nodes
 
             showExample = GUILayout.Toggle(showExample, "ShowLuaExample");
             if (showExample)
-                GUILayout.TextArea(LuaManager.Instance.luaGamma);
+                GUILayout.TextArea(LuaManager.Instance.luaGrammar);
         }
 
         public string recordFunctionBody;
